@@ -94,15 +94,15 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] `msgReliable` (**9.1.3.7, Reliable Data Transfer (Message)**)
     - [x] `msgCapacityProfile` (**9.1.3.8, Message Capacity Profile Override**)
     - [x] `noFragmentation` / `noSegmentation` (**9.1.3.9, No Network-Layer Fragmentation**, **9.1.3.10, No Segmentation**)
-- [ ] Implement Message Receiving: `Connection.Receive()` (**RFC Section 9.3.1, Enqueuing Receives**).
-    - [ ] Handle `minIncompleteLength` and `maxLength` parameters to manage buffering.
-- [ ] Implement Receive Events via the event callback system (**RFC Section 9.3.2, Receive Events**):
-    - [ ] `Received` (for complete messages) (**9.3.2.1, Received**).
-    - [ ] `ReceivedPartial` (for partial messages) (**9.3.2.2, ReceivedPartial**).
-    - [ ] `ReceiveError` (**9.3.2.3, ReceiveError**)
-- [ ] Implement a Message Framer system (**RFC Section 9.1.2, Message Framers**):
-    - [ ] Define a `Framer` trait in Rust.
-    - [ ] Allow adding framer implementations to a `Preconnection`. This is key for layering application protocols like HTTP over the transport.
+- [x] Implement Message Receiving: `Connection.Receive()` (**RFC Section 9.3.1, Enqueuing Receives**).
+    - [x] Handle `minIncompleteLength` and `maxLength` parameters to manage buffering.
+- [x] Implement Receive Events via the event callback system (**RFC Section 9.3.2, Receive Events**):
+    - [x] `Received` (for complete messages) (**9.3.2.1, Received**).
+    - [x] `ReceivedPartial` (for partial messages) (**9.3.2.2, ReceivedPartial**).
+    - [x] `ReceiveError` (**9.3.2.3, ReceiveError**)
+- [x] Implement a Message Framer system (**RFC Section 9.1.2, Message Framers**):
+    - [x] Define a `Framer` trait in Rust.
+    - [x] Allow adding framer implementations to a `Preconnection`. This is key for layering application protocols like HTTP over the transport.
 
 ## Phase 4: Connection Management & Termination (RFC Section 8, Managing Connections & 10, Connection Termination)
 

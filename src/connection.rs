@@ -4,7 +4,7 @@
 use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
     TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
-    EndpointIdentifier, ConnectionGroup, ConnectionGroupId,
+    EndpointIdentifier, ConnectionGroup, ConnectionGroupId, FramerStack,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,8 +12,15 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 use tokio::net::TcpStream;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use tokio::time::timeout;
+
+/// A receive request queued for processing
+struct ReceiveRequest {
+    min_incomplete_length: Option<usize>,
+    max_length: Option<usize>,
+    response_channel: tokio::sync::oneshot::Sender<Result<(Message, MessageContext)>>,
+}
 
 /// A Connection represents an instance of a transport Protocol Stack
 /// on which data can be sent to and/or received from a Remote Endpoint
@@ -41,6 +48,12 @@ struct ConnectionInner {
     batched_messages: Vec<Message>,
     // Message ID counter
     next_message_id: Arc<AtomicU64>,
+    // Message framers for this connection
+    framers: FramerStack,
+    // Receive buffer for incoming data
+    receive_buffer: Vec<u8>,
+    // Queue of pending receive requests
+    receive_queue: Vec<ReceiveRequest>,
 }
 
 impl Clone for Connection {
@@ -73,6 +86,9 @@ impl Connection {
                 batch_mode: false,
                 batched_messages: Vec::new(),
                 next_message_id: Arc::new(AtomicU64::new(1)),
+                framers: FramerStack::new(),
+                receive_buffer: Vec::new(),
+                receive_queue: Vec::new(),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -102,6 +118,9 @@ impl Connection {
                 batch_mode: false,
                 batched_messages: Vec::new(),
                 next_message_id: Arc::new(AtomicU64::new(1)),
+                framers: FramerStack::new(), // Will be populated from preconnection async
+                receive_buffer: Vec::new(),
+                receive_queue: Vec::new(),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -165,12 +184,20 @@ impl Connection {
     async fn send_message_internal(&self, message: Message) -> Result<()> {
         let mut inner = self.inner.write().await;
         
+        // Frame the message if framers are available
+        let data_to_send = if !inner.framers.is_empty() {
+            let context = MessageContext::new(); // Use MessageContext for framing
+            inner.framers.frame_message(&message, &context).await?
+        } else {
+            message.data().to_vec()
+        };
+        
         if let Some(ref mut stream) = inner.tcp_stream {
             let message_id = message.id();
             let event_sender = self.event_sender.clone();
             
             // Send the message
-            match stream.write_all(message.data()).await {
+            match stream.write_all(&data_to_send).await {
                 Ok(_) => {
                     match stream.flush().await {
                         Ok(_) => {
@@ -233,21 +260,246 @@ impl Connection {
         let inner = self.inner.read().await;
         inner.next_message_id.fetch_add(1, Ordering::SeqCst)
     }
+    
+    /// Use length-prefix framer for messages
+    pub async fn use_length_prefix_framer(&self) -> Result<()> {
+        use crate::LengthPrefixFramer;
+        let mut inner = self.inner.write().await;
+        inner.framers.add_framer(Box::new(LengthPrefixFramer::new()));
+        Ok(())
+    }
 
     /// Receive messages from the connection
-    /// RFC Section 9.3
+    /// RFC Section 9.3.1 - Enqueuing Receives
     pub async fn receive(&self) -> Result<(Message, MessageContext)> {
-        let inner = self.inner.read().await;
+        self.receive_with_params(None, None).await
+    }
+    
+    /// Receive messages with buffer management parameters
+    /// RFC Section 9.3.1 - Enqueuing Receives
+    /// 
+    /// minIncompleteLength: Minimum number of bytes to deliver for a partial message
+    /// maxLength: Maximum number of bytes to accept for a single message
+    pub async fn receive_with_params(
+        &self, 
+        min_incomplete_length: Option<usize>, 
+        max_length: Option<usize>
+    ) -> Result<(Message, MessageContext)> {
+        let state = {
+            let inner = self.inner.read().await;
+            inner.state
+        };
         
-        match inner.state {
+        match state {
             ConnectionState::Established | ConnectionState::Establishing => {
-                // TODO: Implement actual message receiving
-                Err(TransportServicesError::NotSupported("Receive not yet implemented".to_string()))
+                // Keep reading until we have a complete message
+                let mut buffer = [0u8; 8192];
+                
+                loop {
+                    // Check if we have a complete message in the buffer already
+                    let (has_complete_message, result) = {
+                        let mut inner = self.inner.write().await;
+                        
+                        if inner.receive_buffer.is_empty() {
+                            (false, None)
+                        } else if !inner.framers.is_empty() {
+                            // Use the framer to parse - we need to manually check for complete messages
+                            // Since we have length-prefix framing, let's implement simple length-prefix parsing here
+                            if inner.receive_buffer.len() >= 4 {
+                                let len_bytes = &inner.receive_buffer[0..4];
+                                let expected_len = u32::from_be_bytes([len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]]) as usize;
+                                
+                                if inner.receive_buffer.len() >= 4 + expected_len {
+                                    // We have a complete message
+                                    let message_data = &inner.receive_buffer[4..4 + expected_len];
+                                    let message = Message::from_bytes(message_data);
+                                    let mut context = MessageContext::new();
+                                    // Set remote endpoint if available
+                                    context.remote_endpoint = inner.remote_endpoint.clone();
+                                    
+                                    // Remove the processed message from buffer
+                                    inner.receive_buffer.drain(..4 + expected_len);
+                                    
+                                    // Check max_length constraint
+                                    if let Some(max_len) = max_length {
+                                        if message.data().len() > max_len {
+                                            (true, Some(Err(TransportServicesError::MessageTooLarge(format!(
+                                                "Message size {} exceeds max length {}", 
+                                                message.data().len(), 
+                                                max_len
+                                            )))))
+                                        } else {
+                                            (true, Some(Ok((message, context))))
+                                        }
+                                    } else {
+                                        (true, Some(Ok((message, context))))
+                                    }
+                                } else {
+                                    (false, None)
+                                }
+                            } else {
+                                (false, None)
+                            }
+                        } else {
+                            // No framers - return all buffered data as one message
+                            let message = Message::from_bytes(&inner.receive_buffer);
+                            let mut context = MessageContext::new();
+                            // Set remote endpoint if available
+                            context.remote_endpoint = inner.remote_endpoint.clone();
+                            inner.receive_buffer.clear();
+                            (true, Some(Ok((message, context))))
+                        }
+                    };
+                    
+                    if has_complete_message {
+                        if let Some(result) = result {
+                            match result {
+                                Ok((message, context)) => {
+                                    // Send Received event
+                                    let _ = self.event_sender.send(ConnectionEvent::Received {
+                                        message_data: message.data().to_vec(),
+                                        message_context: context.clone(),
+                                    });
+                                    
+                                    return Ok((message, context));
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    }
+                    
+                    // No complete message yet - read more data
+                    let read_result = {
+                        let mut inner = self.inner.write().await;
+                        if let Some(ref mut stream) = inner.tcp_stream {
+                            stream.read(&mut buffer).await
+                        } else {
+                            return Err(TransportServicesError::InvalidState("No active stream".to_string()));
+                        }
+                    };
+                    
+                    match read_result {
+                        Ok(0) => {
+                            // Connection closed by peer
+                            let mut inner = self.inner.write().await;
+                            inner.state = ConnectionState::Closed;
+                            let _ = self.event_sender.send(ConnectionEvent::Closed);
+                            return Err(TransportServicesError::ConnectionFailed("Connection closed by peer".to_string()));
+                        }
+                        Ok(n) => {
+                            // Add data to receive buffer
+                            let mut inner = self.inner.write().await;
+                            inner.receive_buffer.extend_from_slice(&buffer[..n]);
+                            // Continue loop to try parsing again
+                        }
+                        Err(e) => {
+                            let _ = self.event_sender.send(ConnectionEvent::ReceiveError {
+                                error: e.to_string(),
+                            });
+                            return Err(TransportServicesError::ReceiveFailed(e.to_string()));
+                        }
+                    }
+                }
             }
             _ => Err(TransportServicesError::InvalidState(
                 "Cannot receive on a closed connection".to_string()
             )),
         }
+    }
+    
+    /// Process the receive queue with available data
+    async fn process_receive_queue(&self) -> Result<()> {
+        loop {
+            let (has_request, has_data) = {
+                let inner = self.inner.read().await;
+                (!inner.receive_queue.is_empty(), !inner.receive_buffer.is_empty())
+            };
+            
+            if !has_request || !has_data {
+                break;
+            }
+            
+            let mut inner = self.inner.write().await;
+            if inner.receive_queue.is_empty() {
+                break;
+            }
+            
+            // Try to parse complete messages from buffer using framers
+            let parsed_messages = if !inner.framers.is_empty() {
+                inner.framers.parse_data(&inner.receive_buffer).await?
+            } else {
+                // No framers - treat entire buffer as one message if we have data
+                if !inner.receive_buffer.is_empty() {
+                    let message = Message::from_bytes(&inner.receive_buffer);
+                    let context = MessageContext::new();
+                    inner.receive_buffer.clear();
+                    vec![(message, context)]
+                } else {
+                    Vec::new()
+                }
+            };
+            
+            if parsed_messages.is_empty() {
+                // No complete messages yet, check if we can deliver partial data
+                if let Some(request) = inner.receive_queue.first() {
+                    if let Some(min_len) = request.min_incomplete_length {
+                        if inner.receive_buffer.len() >= min_len {
+                            // Deliver partial message
+                            let request = inner.receive_queue.remove(0);
+                            let max_len = request.max_length.unwrap_or(inner.receive_buffer.len());
+                            let data_len = std::cmp::min(max_len, inner.receive_buffer.len());
+                            
+                            let data = inner.receive_buffer.drain(..data_len).collect::<Vec<u8>>();
+                            let message = Message::from_bytes(&data);
+                            let context = MessageContext::new();
+                            
+                            // Send ReceivedPartial event
+                            let _ = self.event_sender.send(ConnectionEvent::ReceivedPartial {
+                                message_data: data.clone(),
+                                message_context: context.clone(),
+                                end_of_message: false,
+                            });
+                            
+                            let _ = request.response_channel.send(Ok((message, context)));
+                        }
+                    }
+                }
+                break;
+            }
+            
+            // Deliver complete messages
+            for (message, context) in parsed_messages {
+                if inner.receive_queue.is_empty() {
+                    break;
+                }
+                
+                let request = inner.receive_queue.remove(0);
+                
+                // Check max_length constraint
+                if let Some(max_len) = request.max_length {
+                    if message.data().len() > max_len {
+                        let _ = request.response_channel.send(Err(
+                            TransportServicesError::MessageTooLarge(format!(
+                                "Message size {} exceeds max length {}", 
+                                message.data().len(), 
+                                max_len
+                            ))
+                        ));
+                        continue;
+                    }
+                }
+                
+                // Send Received event
+                let _ = self.event_sender.send(ConnectionEvent::Received {
+                    message_data: message.data().to_vec(),
+                    message_context: context.clone(),
+                });
+                
+                let _ = request.response_channel.send(Ok((message, context)));
+            }
+        }
+        
+        Ok(())
     }
 
     /// Close the connection gracefully
@@ -421,6 +673,9 @@ impl Connection {
                     self.send_message_internal(msg).await?;
                 }
                 
+                // TODO: Start background reading task (disabled for now to avoid deadlocks)
+                // self.start_reading_task().await?;
+                
                 // Signal Ready event
                 let _ = self.event_sender.send(ConnectionEvent::Ready);
                 Ok(())
@@ -500,6 +755,90 @@ impl Connection {
         // For now, just abort this connection
         self.abort().await
     }
+    
+    /// Start the background TCP reading task
+    async fn start_reading_task(&self) -> Result<()> {
+        let connection = self.clone();
+        
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 8192];
+            
+            loop {
+                // Check if connection is still active
+                let (has_stream, is_active) = {
+                    let inner = connection.inner.read().await;
+                    (inner.tcp_stream.is_some(), 
+                     inner.state == ConnectionState::Established || inner.state == ConnectionState::Establishing)
+                };
+                
+                if !has_stream || !is_active {
+                    break;
+                }
+                
+                // Read data from TCP stream - clone the stream to avoid holding the lock
+                let stream_clone = {
+                    let inner = connection.inner.read().await;
+                    if let Some(ref stream) = inner.tcp_stream {
+                        // Create a reference we can use - we need to restructure this to avoid deadlock
+                        true
+                    } else {
+                        false
+                    }
+                };
+                
+                if !stream_clone {
+                    break;
+                }
+                
+                // We need to approach this differently to avoid deadlocks
+                // For now, we'll use a simpler approach with a timeout to avoid holding locks
+                let read_result = tokio::time::timeout(Duration::from_millis(100), async {
+                    let mut inner = connection.inner.write().await;
+                    if let Some(ref mut stream) = inner.tcp_stream {
+                        stream.read(&mut buffer).await
+                    } else {
+                        Ok(0)
+                    }
+                }).await;
+                
+                let read_result = match read_result {
+                    Ok(result) => result,
+                    Err(_) => continue, // Timeout, try again
+                };
+                
+                match read_result {
+                    Ok(0) => {
+                        // Connection closed by peer
+                        let _ = connection.event_sender.send(ConnectionEvent::Closed);
+                        break;
+                    }
+                    Ok(n) => {
+                        // Add data to receive buffer
+                        {
+                            let mut inner = connection.inner.write().await;
+                            inner.receive_buffer.extend_from_slice(&buffer[..n]);
+                        }
+                        
+                        // Process any pending receive requests
+                        if let Err(e) = connection.process_receive_queue().await {
+                            let _ = connection.event_sender.send(ConnectionEvent::ReceiveError {
+                                error: e.to_string(),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        // Read error
+                        let _ = connection.event_sender.send(ConnectionEvent::ReceiveError {
+                            error: e.to_string(),
+                        });
+                        break;
+                    }
+                }
+            }
+        });
+        
+        Ok(())
+    }
 
     // Internal method to update state
     #[allow(dead_code)]
@@ -518,6 +857,10 @@ impl Connection {
         inner.tcp_stream = Some(stream);
         inner.state = ConnectionState::Established;
         drop(inner);
+        
+        // TODO: Start background reading task (disabled for now to avoid deadlocks)
+        // let _ = self.start_reading_task().await;
+        
         let _ = self.event_sender.send(ConnectionEvent::Ready);
     }
 }

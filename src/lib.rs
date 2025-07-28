@@ -10,6 +10,7 @@ pub mod connection_group;
 pub mod listener;
 pub mod message;
 pub mod error;
+pub mod framer;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;
@@ -21,6 +22,7 @@ pub use connection_group::{ConnectionGroup, ConnectionGroupId};
 pub use listener::Listener;
 pub use message::{Message, MessageContext};
 pub use error::{TransportServicesError, Result};
+pub use framer::{Framer, LengthPrefixFramer, FramerStack};
 
 #[cfg(test)]
 mod tests;

@@ -4,7 +4,7 @@
 use crate::{
     LocalEndpoint, RemoteEndpoint, TransportProperties, SecurityParameters,
     Connection, Listener, Result, TransportServicesError, EndpointIdentifier,
-    Message,
+    Message, Framer, FramerStack,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,6 +39,7 @@ struct PreconnectionInner {
     remote_endpoints: Vec<RemoteEndpoint>,
     transport_properties: TransportProperties,
     security_parameters: SecurityParameters,
+    framers: FramerStack,
 }
 
 impl Preconnection {
@@ -55,6 +56,7 @@ impl Preconnection {
                 remote_endpoints,
                 transport_properties,
                 security_parameters,
+                framers: FramerStack::new(),
             })),
         }
     }
@@ -101,6 +103,13 @@ impl Preconnection {
     pub async fn set_security_parameters(&self, parameters: SecurityParameters) {
         let mut inner = self.inner.write().await;
         inner.security_parameters = parameters;
+    }
+
+    /// Add a Message Framer to this Preconnection
+    /// RFC Section 9.1.2.1: Preconnection.AddFramer(framer)
+    pub async fn add_framer(&self, framer: Box<dyn Framer>) {
+        let mut inner = self.inner.write().await;
+        inner.framers.add_framer(framer);
     }
 
     /// Initiate an active connection (client mode)

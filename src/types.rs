@@ -1002,6 +1002,15 @@ pub enum ConnectionEvent {
     /// Error occurred while sending
     /// RFC Section 9.2.2.3
     SendError { message_id: Option<u64>, error: String },
+    /// Complete message was received
+    /// RFC Section 9.3.2.1
+    Received { message_data: Vec<u8>, message_context: crate::MessageContext },
+    /// Partial message was received
+    /// RFC Section 9.3.2.2
+    ReceivedPartial { message_data: Vec<u8>, message_context: crate::MessageContext, end_of_message: bool },
+    /// Error occurred while receiving
+    /// RFC Section 9.3.2.3
+    ReceiveError { error: String },
 }
 
 /// Event types that can be emitted during rendezvous

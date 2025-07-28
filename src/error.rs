@@ -51,6 +51,9 @@ pub enum TransportServicesError {
 
     /// A user-specified or internal timeout was reached.
     Timeout,
+    
+    /// A message was larger than the specified maximum length.
+    MessageTooLarge(String),
 }
 
 impl fmt::Display for TransportServicesError {
@@ -68,6 +71,7 @@ impl fmt::Display for TransportServicesError {
             TransportServicesError::Io(err) => write!(f, "I/O error: {}", err),
             TransportServicesError::NotSupported(msg) => write!(f, "Operation not supported: {}", msg),
             TransportServicesError::Timeout => write!(f, "Operation timed out"),
+            TransportServicesError::MessageTooLarge(msg) => write!(f, "Message too large: {}", msg),
         }
     }
 }
