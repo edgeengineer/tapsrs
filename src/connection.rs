@@ -438,20 +438,29 @@ impl Connection {
                 
                 // Perform graceful close on TCP stream
                 if let Some(ref mut stream) = inner.tcp_stream {
-                    // Flush any buffered data
-                    let _ = stream.flush().await;
+                    // Try to flush any buffered data (ignore errors if connection is broken)
+                    let _ = tokio::time::timeout(
+                        Duration::from_secs(1),
+                        stream.flush()
+                    ).await;
                     
-                    // Shutdown the write side to signal we're done sending
+                    // Try to shutdown the write side (ignore errors if connection is broken)
                     // This sends a TCP FIN packet
-                    let _ = stream.shutdown().await;
+                    let _ = tokio::time::timeout(
+                        Duration::from_secs(1),
+                        stream.shutdown()
+                    ).await;
                 }
                 
                 // Drop the write lock to send batched messages
                 drop(inner);
                 
-                // Send any remaining batched messages
+                // Send any remaining batched messages (with timeout to avoid hanging)
                 for message in batched_messages {
-                    let _ = self.send_message_internal(message).await;
+                    let _ = tokio::time::timeout(
+                        Duration::from_millis(100),
+                        self.send_message_internal(message)
+                    ).await;
                 }
                 
                 // Re-acquire lock to update state
@@ -1013,9 +1022,15 @@ impl Connection {
     /// Close all connections in the group
     /// RFC Section 10
     pub async fn close_group(&self) -> Result<()> {
-        let inner = self.inner.read().await;
+        // Check if we have a group
+        let has_group = {
+            let inner = self.inner.read().await;
+            inner.connection_group.is_some()
+        };
         
-        if let Some(ref group) = inner.connection_group {
+        if has_group {
+            let inner = self.inner.read().await;
+            let group = inner.connection_group.as_ref().unwrap();
             // Get all connections in the group
             let connections = group.get_connections().await;
             drop(inner); // Release lock before closing connections
@@ -1068,9 +1083,15 @@ impl Connection {
     
     /// Abort all connections in the group
     pub async fn abort_group(&self) -> Result<()> {
-        let inner = self.inner.read().await;
+        // Check if we have a group
+        let has_group = {
+            let inner = self.inner.read().await;
+            inner.connection_group.is_some()
+        };
         
-        if let Some(ref group) = inner.connection_group {
+        if has_group {
+            let inner = self.inner.read().await;
+            let group = inner.connection_group.as_ref().unwrap();
             // Get all connections in the group
             let connections = group.get_connections().await;
             drop(inner); // Release lock before aborting connections

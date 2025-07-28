@@ -162,82 +162,122 @@ async fn test_abort_group_aborts_all_connections() {
     assert!(conn2.send(msg).await.is_err());
 }
 
-#[tokio::test]
-#[ignore = "Hanging issue - needs investigation"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_close_group_on_ungrouped_connection() {
-    // Start a TCP listener for a real connection
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    
-    // Accept connection in background
-    tokio::spawn(async move {
-        let (_stream, _) = listener.accept().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    });
-    
-    // Create a real connection (not part of a group)
-    let preconn = new_preconnection(
-        vec![],
-        vec![RemoteEndpoint::builder()
-            .socket_address(addr)
-            .build()],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let conn = preconn.initiate().await.expect("Should connect");
-    
-    // Wait for ready
-    match conn.next_event().await {
-        Some(ConnectionEvent::Ready) => {},
-        other => panic!("Expected Ready event, got {:?}", other),
-    }
-    
-    // Verify it's not grouped
-    assert!(!conn.is_grouped().await);
-    
-    // close_group should just close this connection
-    conn.close_group().await.expect("Should close");
-    
-    assert_eq!(conn.state().await, ConnectionState::Closed);
+    tokio::time::timeout(Duration::from_secs(10), async {
+        // Start a TCP listener for a real connection
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        
+        // Accept connection in background
+        let _server_task = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            // Keep connection alive and echo data
+            let mut buf = [0u8; 1024];
+            loop {
+                match stream.read(&mut buf).await {
+                    Ok(0) => break, // Connection closed
+                    Ok(n) => {
+                        if stream.write_all(&buf[..n]).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        
+        // Create a real connection (not part of a group)
+        let preconn = new_preconnection(
+            vec![],
+            vec![RemoteEndpoint::builder()
+                .socket_address(addr)
+                .build()],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let conn = preconn.initiate().await.expect("Should connect");
+        
+        // Wait for ready
+        match conn.next_event().await {
+            Some(ConnectionEvent::Ready) => {},
+            other => panic!("Expected Ready event, got {:?}", other),
+        }
+        
+        // Verify it's not grouped
+        assert!(!conn.is_grouped().await);
+        
+        // close_group should just close this connection
+        conn.close_group().await.expect("Should close");
+        
+        // Check for Closed event
+        match conn.next_event().await {
+            Some(ConnectionEvent::Closed) => {},
+            other => panic!("Expected Closed event, got {:?}", other),
+        }
+        
+        assert_eq!(conn.state().await, ConnectionState::Closed);
+    }).await.expect("Test should complete within timeout");
 }
 
-#[tokio::test]
-#[ignore = "Hanging issue - needs investigation"]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_abort_group_on_ungrouped_connection() {
-    // Start a TCP listener for a real connection
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    
-    // Accept connection in background
-    tokio::spawn(async move {
-        let (_stream, _) = listener.accept().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    });
-    
-    // Create a real connection (not part of a group)
-    let preconn = new_preconnection(
-        vec![],
-        vec![RemoteEndpoint::builder()
-            .socket_address(addr)
-            .build()],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let conn = preconn.initiate().await.expect("Should connect");
-    
-    // Wait for ready
-    match conn.next_event().await {
-        Some(ConnectionEvent::Ready) => {},
-        other => panic!("Expected Ready event, got {:?}", other),
-    }
-    
-    // Verify it's not grouped
-    assert!(!conn.is_grouped().await);
-    
-    // abort_group should just abort this connection
-    conn.abort_group().await.expect("Should abort");
-    
-    assert_eq!(conn.state().await, ConnectionState::Closed);
+    tokio::time::timeout(Duration::from_secs(10), async {
+        // Start a TCP listener for a real connection
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        
+        // Accept connection in background
+        let _server_task = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            // Keep connection alive and echo data
+            let mut buf = [0u8; 1024];
+            loop {
+                match stream.read(&mut buf).await {
+                    Ok(0) => break, // Connection closed
+                    Ok(n) => {
+                        if stream.write_all(&buf[..n]).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        
+        // Create a real connection (not part of a group)
+        let preconn = new_preconnection(
+            vec![],
+            vec![RemoteEndpoint::builder()
+                .socket_address(addr)
+                .build()],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let conn = preconn.initiate().await.expect("Should connect");
+        
+        // Wait for ready
+        match conn.next_event().await {
+            Some(ConnectionEvent::Ready) => {},
+            other => panic!("Expected Ready event, got {:?}", other),
+        }
+        
+        // Verify it's not grouped
+        assert!(!conn.is_grouped().await);
+        
+        // abort_group should just abort this connection
+        conn.abort_group().await.expect("Should abort");
+        
+        // Check for ConnectionError event
+        match conn.next_event().await {
+            Some(ConnectionEvent::ConnectionError(msg)) => {
+                assert!(msg.contains("aborted"));
+            }
+            other => panic!("Expected ConnectionError event, got {:?}", other),
+        }
+        
+        assert_eq!(conn.state().await, ConnectionState::Closed);
+    }).await.expect("Test should complete within timeout");
 }
