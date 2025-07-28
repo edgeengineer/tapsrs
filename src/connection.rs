@@ -7,6 +7,7 @@ use crate::{
     LocalEndpoint, Message, MessageContext, Preconnection, Preference, RemoteEndpoint, Result,
     TimeoutValue, TransportProperties, TransportServicesError,
 };
+#[cfg(not(target_os = "windows"))]
 use socket2::Socket;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -868,8 +869,8 @@ impl Connection {
             }
             "keepAliveTimeout" => {
                 // Configure keep-alive on TCP stream
-                if let Some(ref stream) = inner.tcp_stream {
-                    if let ConnectionProperty::KeepAliveTimeout(timeout_val) = &value {
+                if let Some(ref _stream) = inner.tcp_stream {
+                    if let ConnectionProperty::KeepAliveTimeout(_timeout_val) = &value {
                         // Get the raw socket to set keep-alive options
                         #[cfg(unix)]
                         {
@@ -1244,7 +1245,7 @@ impl Connection {
     }
 
     /// Get the TCP Maximum Segment Size (MSS) from a TcpStream
-    async fn get_tcp_mss(&self, stream: &TcpStream) -> Result<usize> {
+    async fn get_tcp_mss(&self, _stream: &TcpStream) -> Result<usize> {
         #[cfg(unix)]
         {
             use std::os::unix::io::{AsRawFd, FromRawFd};
