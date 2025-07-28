@@ -19,4 +19,7 @@ mod rendezvous_tests;
 mod message_sending_tests;
 
 #[cfg(test)]
+mod message_properties_tests;
+
+#[cfg(test)]
 mod integration_tests;

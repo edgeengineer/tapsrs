@@ -124,7 +124,7 @@ async fn test_transport_properties_application() {
     // Send some data
     let msg = Message::from_string("Test with properties")
         .with_priority(50)
-        .idempotent();
+        .safely_replayable();
     conn.send(msg).await.unwrap();
     
     conn.close().await.unwrap();
@@ -638,4 +638,89 @@ async fn test_rendezvous_with_transport_properties() {
     
     // Clean up
     listener.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_message_properties_integration() {
+    // Start a test server
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
+    
+    // Accept connections in background
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut buf = [0; 1024];
+                let _ = tokio::io::AsyncReadExt::read(&mut stream, &mut buf).await;
+            });
+        }
+    });
+    
+    let remote = RemoteEndpoint::builder()
+        .socket_address(server_addr)
+        .build();
+    
+    let preconn = new_preconnection(
+        vec![],
+        vec![remote],
+        TransportProperties::default(),
+        SecurityParameters::default(),
+    );
+    
+    let conn = preconn.initiate().await.unwrap();
+    
+    // Wait for establishment
+    while conn.state().await == ConnectionState::Establishing {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    
+    // Consume Ready event
+    let _ = conn.next_event().await;
+    
+    // Send messages with different properties
+    
+    // High priority urgent message
+    let urgent = Message::builder(b"URGENT".to_vec())
+        .priority(1000)
+        .lifetime(Duration::from_millis(100))
+        .capacity_profile(MessageCapacityProfile::LowLatencyInteractive)
+        .build();
+    
+    conn.send(urgent).await.unwrap();
+    
+    // Bulk data transfer
+    let bulk = Message::builder(b"Large bulk data...".to_vec())
+        .priority(1)
+        .capacity_profile(MessageCapacityProfile::Scavenger)
+        .checksum_length(32)
+        .reliable(true)
+        .build();
+    
+    conn.send(bulk).await.unwrap();
+    
+    // Ordered transaction messages
+    for i in 0..3 {
+        let txn = Message::builder(format!("Transaction {}", i).into_bytes())
+            .ordered(true)
+            .reliable(true)
+            .safely_replayable(false)
+            .build();
+        conn.send(txn).await.unwrap();
+    }
+    
+    // Final message to close the session
+    let final_msg = Message::builder(b"GOODBYE".to_vec())
+        .final_message(true)
+        .no_fragmentation()
+        .build();
+    
+    conn.send(final_msg).await.unwrap();
+    
+    // Verify all messages were sent
+    for _ in 0..6 {
+        let event = conn.next_event().await;
+        assert!(matches!(event, Some(ConnectionEvent::Sent { .. })));
+    }
+    
+    conn.close().await.unwrap();
 }

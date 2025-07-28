@@ -610,16 +610,70 @@ pub struct ConnectionProperties {
     pub maximum_message_size_on_receive: Option<usize>,
 }
 
+/// Message Capacity Profile for overriding connection defaults
+/// RFC Section 9.1.3.8
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageCapacityProfile {
+    /// Optimized for low latency at the expense of efficiency
+    LowLatencyInteractive,
+    /// Optimized for low latency for application-limited transfers  
+    LowLatencyNonInteractive,
+    /// Optimized for high throughput and efficiency
+    ConstantRate,
+    /// Optimized for transferring large amounts of data
+    Scavenger,
+}
+
 /// Message properties (per-message basis)
+/// RFC Section 9.1.3
 #[derive(Debug, Clone, Default)]
 pub struct MessageProperties {
+    /// Message lifetime before expiry
+    /// RFC Section 9.1.3.1
     pub lifetime: Option<Duration>,
+    
+    /// Message priority (higher values = higher priority)
+    /// RFC Section 9.1.3.2
     pub priority: Option<i32>,
+    
+    /// Whether ordering should be preserved for this message
+    /// RFC Section 9.1.3.3
     pub ordered: Option<bool>,
-    pub idempotent: bool,
+    
+    /// Whether this message is safely replayable (idempotent)
+    /// RFC Section 9.1.3.4
+    pub safely_replayable: bool,
+    
+    /// Whether this is the final message on the connection
+    /// RFC Section 9.1.3.5
     pub final_message: bool,
-    pub corruption_protection_length: Option<usize>,
+    
+    /// Checksum coverage length in bytes
+    /// RFC Section 9.1.3.6
+    pub checksum_length: Option<usize>,
+    
+    /// Whether reliable delivery is required for this message
+    /// RFC Section 9.1.3.7
     pub reliable: Option<bool>,
+    
+    /// Capacity profile override for this message
+    /// RFC Section 9.1.3.8
+    pub capacity_profile: Option<MessageCapacityProfile>,
+    
+    /// Disable network-layer fragmentation
+    /// RFC Section 9.1.3.9
+    pub no_fragmentation: bool,
+    
+    /// Disable transport-layer segmentation
+    /// RFC Section 9.1.3.10
+    pub no_segmentation: bool,
+    
+    // Legacy fields (keeping for compatibility)
+    #[deprecated(note = "Use safely_replayable instead")]
+    pub idempotent: bool,
+    #[deprecated(note = "Use checksum_length instead")]
+    pub corruption_protection_length: Option<usize>,
+    #[deprecated(note = "Use capacity_profile instead")]
     pub message_capacity: Option<usize>,
 }
 

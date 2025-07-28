@@ -1,7 +1,7 @@
 //! Message implementation for Transport Services
 //! Based on RFC 9622 Section 9.1 (Messages and Framers)
 
-use crate::{MessageProperties, LocalEndpoint, RemoteEndpoint};
+use crate::{MessageProperties, MessageCapacityProfile, LocalEndpoint, RemoteEndpoint};
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -122,9 +122,21 @@ impl Message {
         self
     }
 
-    /// Mark message as idempotent (safe to replay)
+    /// Mark message as safely replayable (idempotent)
+    /// RFC Section 9.1.3.4
+    pub fn safely_replayable(mut self) -> Self {
+        self.properties.safely_replayable = true;
+        self
+    }
+    
+    /// Deprecated: Use safely_replayable() instead
+    #[deprecated(note = "Use safely_replayable() instead")]
     pub fn idempotent(mut self) -> Self {
-        self.properties.idempotent = true;
+        self.properties.safely_replayable = true;
+        #[allow(deprecated)]
+        {
+            self.properties.idempotent = true;
+        }
         self
     }
 
@@ -176,6 +188,154 @@ impl Message {
     /// Create a partial message (not end of message)
     pub fn partial(data: Vec<u8>) -> Self {
         Self::new(data).with_end_of_message(false)
+    }
+    
+    /// Set whether message ordering should be preserved
+    /// RFC Section 9.1.3.3
+    pub fn with_ordered(mut self, ordered: bool) -> Self {
+        self.properties.ordered = Some(ordered);
+        self
+    }
+    
+    /// Set checksum coverage length
+    /// RFC Section 9.1.3.6
+    pub fn with_checksum_length(mut self, length: usize) -> Self {
+        self.properties.checksum_length = Some(length);
+        self
+    }
+    
+    /// Set whether reliable delivery is required
+    /// RFC Section 9.1.3.7
+    pub fn with_reliable(mut self, reliable: bool) -> Self {
+        self.properties.reliable = Some(reliable);
+        self
+    }
+    
+    /// Set capacity profile for this message
+    /// RFC Section 9.1.3.8
+    pub fn with_capacity_profile(mut self, profile: MessageCapacityProfile) -> Self {
+        self.properties.capacity_profile = Some(profile);
+        self
+    }
+    
+    /// Disable network-layer fragmentation
+    /// RFC Section 9.1.3.9
+    pub fn no_fragmentation(mut self) -> Self {
+        self.properties.no_fragmentation = true;
+        self
+    }
+    
+    /// Disable transport-layer segmentation
+    /// RFC Section 9.1.3.10
+    pub fn no_segmentation(mut self) -> Self {
+        self.properties.no_segmentation = true;
+        self
+    }
+    
+    /// Builder for creating a message with specific properties
+    pub fn builder(data: Vec<u8>) -> MessageBuilder {
+        MessageBuilder::new(data)
+    }
+}
+
+/// Builder for creating messages with specific properties
+pub struct MessageBuilder {
+    message: Message,
+}
+
+impl MessageBuilder {
+    /// Create a new message builder
+    pub fn new(data: Vec<u8>) -> Self {
+        Self {
+            message: Message::new(data),
+        }
+    }
+    
+    /// Set message ID
+    pub fn id(mut self, id: u64) -> Self {
+        self.message = self.message.with_id(id);
+        self
+    }
+    
+    /// Set message lifetime
+    pub fn lifetime(mut self, lifetime: Duration) -> Self {
+        self.message = self.message.with_lifetime(lifetime);
+        self
+    }
+    
+    /// Set message priority
+    pub fn priority(mut self, priority: i32) -> Self {
+        self.message = self.message.with_priority(priority);
+        self
+    }
+    
+    /// Set whether message is safely replayable
+    pub fn safely_replayable(mut self, replayable: bool) -> Self {
+        if replayable {
+            self.message = self.message.safely_replayable();
+        }
+        self
+    }
+    
+    /// Set whether this is the final message
+    pub fn final_message(mut self, is_final: bool) -> Self {
+        if is_final {
+            self.message = self.message.final_message();
+        }
+        self
+    }
+    
+    /// Set whether message is ordered
+    pub fn ordered(mut self, ordered: bool) -> Self {
+        self.message = self.message.with_ordered(ordered);
+        self
+    }
+    
+    /// Set checksum length
+    pub fn checksum_length(mut self, length: usize) -> Self {
+        self.message = self.message.with_checksum_length(length);
+        self
+    }
+    
+    /// Set whether reliable delivery is required
+    pub fn reliable(mut self, reliable: bool) -> Self {
+        self.message = self.message.with_reliable(reliable);
+        self
+    }
+    
+    /// Set capacity profile
+    pub fn capacity_profile(mut self, profile: MessageCapacityProfile) -> Self {
+        self.message = self.message.with_capacity_profile(profile);
+        self
+    }
+    
+    /// Disable fragmentation
+    pub fn no_fragmentation(mut self) -> Self {
+        self.message = self.message.no_fragmentation();
+        self
+    }
+    
+    /// Disable segmentation
+    pub fn no_segmentation(mut self) -> Self {
+        self.message = self.message.no_segmentation();
+        self
+    }
+    
+    /// Set whether this completes the application message
+    pub fn end_of_message(mut self, end: bool) -> Self {
+        self.message = self.message.with_end_of_message(end);
+        self
+    }
+    
+    /// Set send context
+    pub fn send_context(mut self, context: SendContext) -> Self {
+        self.message = self.message.with_send_context(context);
+        self
+    }
+    
+    /// Build the message
+    pub fn build(self) -> Message {
+        self.message
     }
 }
 

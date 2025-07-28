@@ -185,12 +185,12 @@ async fn test_message_properties() {
     let msg = Message::from_string("Test message")
         .with_lifetime(Duration::from_secs(60))
         .with_priority(100)
-        .idempotent()
+        .safely_replayable()
         .final_message();
         
     assert_eq!(msg.properties().lifetime, Some(Duration::from_secs(60)));
     assert_eq!(msg.properties().priority, Some(100));
-    assert!(msg.properties().idempotent);
+    assert!(msg.properties().safely_replayable);
     assert!(msg.properties().final_message);
 }
 
