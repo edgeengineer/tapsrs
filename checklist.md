@@ -75,15 +75,15 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 ## Phase 3: Data Transfer (RFC Section 9, Data Transfer)
 
-- [ ] Implement Message Sending: `Connection.Send()` (**RFC Section 9.2, Sending Data**).
-    - [ ] Handle `messageData` (e.g., `&[u8]`) and `messageContext`.
-    - [ ] Support partial sends via the `endOfMessage` boolean flag (**9.2.3, Partial Sends**).
-    - [ ] Support send batching (`StartBatch`/`EndBatch`) (**9.2.4, Batching Sends**).
-    - [ ] Implement `InitiateWithSend` (**9.2.5, Send on Active Open: InitiateWithSend**).
-- [ ] Implement Send Events via the event callback system (**RFC Section 9.2.2, Send Events**):
-    - [ ] `Sent` (**9.2.2.1, Sent**)
-    - [ ] `Expired` (**9.2.2.2, Expired**)
-    - [ ] `SendError` (**9.2.2.3, SendError**)
+- [x] Implement Message Sending: `Connection.Send()` (**RFC Section 9.2, Sending Data**).
+    - [x] Handle `messageData` (e.g., `&[u8]`) and `messageContext`.
+    - [x] Support partial sends via the `endOfMessage` boolean flag (**9.2.3, Partial Sends**).
+    - [x] Support send batching (`StartBatch`/`EndBatch`) (**9.2.4, Batching Sends**).
+    - [x] Implement `InitiateWithSend` (**9.2.5, Send on Active Open: InitiateWithSend**).
+- [x] Implement Send Events via the event callback system (**RFC Section 9.2.2, Send Events**):
+    - [x] `Sent` (**9.2.2.1, Sent**)
+    - [x] `Expired` (**9.2.2.2, Expired**)
+    - [x] `SendError` (**9.2.2.3, SendError**)
 - [ ] Implement Message Properties (**RFC Section 9.1.3, Message Properties**):
     - [ ] `msgLifetime` (**9.1.3.1, Lifetime**)
     - [ ] `msgPriority` (**9.1.3.2, Priority**)
