@@ -46,4 +46,7 @@ mod readonly_properties_tests;
 mod tcp_properties_tests;
 
 #[cfg(test)]
+mod lifecycle_events_tests;
+
+#[cfg(test)]
 mod integration_tests;

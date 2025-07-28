@@ -5,7 +5,7 @@ use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
     TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
     EndpointIdentifier, ConnectionGroup, ConnectionGroupId, FramerStack,
-    ConnectionProperties, ConnectionProperty, TimeoutValue, CommunicationDirection,
+    ConnectionProperties, ConnectionProperty, TimeoutValue, CommunicationDirection, Preference,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -190,20 +190,40 @@ impl Connection {
                             Ok(())
                         }
                         Err(e) => {
+                            let error_msg = e.to_string();
                             let _ = event_sender.send(ConnectionEvent::SendError { 
                                 message_id,
-                                error: e.to_string()
+                                error: error_msg.clone()
                             });
-                            Err(TransportServicesError::SendFailed(e.to_string()))
+                            
+                            // Check if this might be a soft error
+                            if error_msg.contains("broken pipe") || 
+                               error_msg.contains("connection reset") ||
+                               error_msg.contains("connection refused") {
+                                drop(inner);
+                                self.emit_soft_error(format!("Network error during flush: {}", error_msg)).await;
+                            }
+                            
+                            Err(TransportServicesError::SendFailed(error_msg))
                         }
                     }
                 }
                 Err(e) => {
+                    let error_msg = e.to_string();
                     let _ = event_sender.send(ConnectionEvent::SendError { 
                         message_id,
-                        error: e.to_string()
+                        error: error_msg.clone()
                     });
-                    Err(TransportServicesError::SendFailed(e.to_string()))
+                    
+                    // Check if this might be a soft error (network-related)
+                    if error_msg.contains("broken pipe") || 
+                       error_msg.contains("connection reset") ||
+                       error_msg.contains("connection refused") {
+                        drop(inner);
+                        self.emit_soft_error(format!("Network error during send: {}", error_msg)).await;
+                    }
+                    
+                    Err(TransportServicesError::SendFailed(error_msg))
                 }
             }
         } else {
@@ -375,10 +395,20 @@ impl Connection {
                             // Continue loop to try parsing again
                         }
                         Err(e) => {
+                            let error_msg = e.to_string();
                             let _ = self.event_sender.send(ConnectionEvent::ReceiveError {
-                                error: e.to_string(),
+                                error: error_msg.clone(),
                             });
-                            return Err(TransportServicesError::ReceiveFailed(e.to_string()));
+                            
+                            // Check if this might be a soft error
+                            if error_msg.contains("broken pipe") || 
+                               error_msg.contains("connection reset") ||
+                               error_msg.contains("connection refused") ||
+                               error_msg.contains("timed out") {
+                                self.emit_soft_error(format!("Network error during receive: {}", error_msg)).await;
+                            }
+                            
+                            return Err(TransportServicesError::ReceiveFailed(error_msg));
                         }
                     }
                 }
@@ -576,6 +606,11 @@ impl Connection {
                 if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
                     // Update the remote endpoint for future connection attempts
                     inner.remote_endpoint = Some(endpoint);
+                    drop(inner);
+                    
+                    // Emit PathChange event since endpoints changed
+                    self.emit_path_change().await;
+                    
                     Ok(())
                 } else {
                     // Log that we received the endpoint but can't use it with current transport
@@ -622,6 +657,11 @@ impl Connection {
                 if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
                     // Update the local endpoint for future connection attempts
                     inner.local_endpoint = Some(endpoint);
+                    drop(inner);
+                    
+                    // Emit PathChange event since endpoints changed
+                    self.emit_path_change().await;
+                    
                     Ok(())
                 } else {
                     // In a multipath implementation, we would:
@@ -1098,6 +1138,24 @@ impl Connection {
         // let _ = self.start_reading_task().await;
         
         let _ = self.event_sender.send(ConnectionEvent::Ready);
+    }
+    
+    /// Emit a SoftError event
+    /// RFC Section 8.3.1 - Soft Errors
+    pub(crate) async fn emit_soft_error(&self, error_message: String) {
+        // Only emit if soft error notifications are requested
+        let inner = self.inner.read().await;
+        if inner.transport_properties.selection_properties.soft_error_notify == Preference::Require ||
+           inner.transport_properties.selection_properties.soft_error_notify == Preference::Prefer {
+            drop(inner);
+            let _ = self.event_sender.send(ConnectionEvent::SoftError(error_message));
+        }
+    }
+    
+    /// Emit a PathChange event  
+    /// RFC Section 8.3.2 - Path Change
+    pub(crate) async fn emit_path_change(&self) {
+        let _ = self.event_sender.send(ConnectionEvent::PathChange);
     }
     
     /// Get the TCP Maximum Segment Size (MSS) from a TcpStream
