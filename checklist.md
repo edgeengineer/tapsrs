@@ -159,14 +159,14 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 - [x] Implement Connection Lifecycle Events via the event callback system (**RFC Section 8.3, Connection Lifecycle Events**):
     - [x] `SoftError` (**8.3.1, Soft Errors**)
     - [x] `PathChange` (**8.3.2, Path Change**)
-- [ ] Implement Connection Termination actions (**RFC Section 10, Connection Termination**):
-    - [ ] `Connection.Close()`
-    - [ ] `Connection.Abort()`
-    - [ ] `Connection.CloseGroup()`
-    - [ ] `Connection.AbortGroup()`
-- [ ] Implement Termination Events via the event callback system (**RFC Section 10**):
-    - [ ] `Closed`
-    - [ ] `ConnectionError`
+- [x] Implement Connection Termination actions (**RFC Section 10, Connection Termination**):
+    - [x] `Connection.Close()`
+    - [x] `Connection.Abort()`
+    - [x] `Connection.CloseGroup()`
+    - [x] `Connection.AbortGroup()`
+- [x] Implement Termination Events via the event callback system (**RFC Section 10**):
+    - [x] `Closed`
+    - [x] `ConnectionError`
 
 ## Phase 5: Packaging and Distribution
 
