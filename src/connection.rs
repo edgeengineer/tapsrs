@@ -3,10 +3,16 @@
 
 use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
-    TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError
+    TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
+    EndpointIdentifier,
 };
 use std::sync::Arc;
+use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
+use tokio::net::TcpStream;
+use tokio::io::AsyncWriteExt;
+use tokio::time::timeout;
 
 /// A Connection represents an instance of a transport Protocol Stack
 /// on which data can be sent to and/or received from a Remote Endpoint
@@ -21,10 +27,23 @@ struct ConnectionInner {
     state: ConnectionState,
     local_endpoint: Option<LocalEndpoint>,
     remote_endpoint: Option<RemoteEndpoint>,
-    _transport_properties: TransportProperties,
+    #[allow(dead_code)]
+    transport_properties: TransportProperties,
+    // Actual network stream (for now just TCP)
+    tcp_stream: Option<TcpStream>,
+    // Message queue for messages sent before connection is established
+    pending_messages: Vec<Message>,
 }
 
 impl Connection {
+    /// Clone the connection for internal use
+    pub(crate) fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            event_sender: self.event_sender.clone(),
+            event_receiver: Arc::clone(&self.event_receiver),
+        }
+    }
     /// Create a new Connection (internal use)
     pub(crate) fn new(preconnection: Preconnection, state: ConnectionState) -> Self {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
@@ -35,7 +54,34 @@ impl Connection {
                 state,
                 local_endpoint: None,
                 remote_endpoint: None,
-                _transport_properties: TransportProperties::default(),
+                transport_properties: TransportProperties::default(),
+                tcp_stream: None,
+                pending_messages: Vec::new(),
+            })),
+            event_sender,
+            event_receiver: Arc::new(RwLock::new(event_receiver)),
+        }
+    }
+    
+    /// Create a new Connection with pre-populated data (for initiate)
+    pub(crate) fn new_with_data(
+        preconnection: Preconnection,
+        state: ConnectionState,
+        local_endpoint: Option<LocalEndpoint>,
+        remote_endpoint: Option<RemoteEndpoint>,
+        transport_properties: TransportProperties,
+    ) -> Self {
+        let (event_sender, event_receiver) = mpsc::unbounded_channel();
+        
+        Self {
+            inner: Arc::new(RwLock::new(ConnectionInner {
+                preconnection,
+                state,
+                local_endpoint,
+                remote_endpoint,
+                transport_properties,
+                tcp_stream: None,
+                pending_messages: Vec::new(),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -50,17 +96,26 @@ impl Connection {
 
     /// Send a message on the connection
     /// RFC Section 9.2
-    pub async fn send(&self, _message: Message) -> Result<()> {
-        let inner = self.inner.read().await;
+    pub async fn send(&self, message: Message) -> Result<()> {
+        let mut inner = self.inner.write().await;
         
         match inner.state {
             ConnectionState::Established => {
-                // TODO: Implement actual message sending
-                Ok(())
+                if let Some(ref mut stream) = inner.tcp_stream {
+                    stream.write_all(message.data()).await
+                        .map_err(|e| TransportServicesError::SendFailed(e.to_string()))?;
+                    stream.flush().await
+                        .map_err(|e| TransportServicesError::SendFailed(e.to_string()))?;
+                    Ok(())
+                } else {
+                    Err(TransportServicesError::InvalidState(
+                        "No active stream".to_string()
+                    ))
+                }
             }
             ConnectionState::Establishing => {
                 // Queue message for sending after establishment
-                // TODO: Implement message queueing
+                inner.pending_messages.push(message);
                 Ok(())
             }
             _ => Err(TransportServicesError::InvalidState(
@@ -162,6 +217,58 @@ impl Connection {
     pub async fn next_event(&self) -> Option<ConnectionEvent> {
         let mut receiver = self.event_receiver.write().await;
         receiver.recv().await
+    }
+    
+    /// Internal method to establish TCP connection
+    pub(crate) async fn establish_tcp(
+        &self,
+        addr: SocketAddr,
+        connection_timeout: Option<Duration>,
+    ) -> Result<()> {
+        let timeout_duration = connection_timeout.unwrap_or(Duration::from_secs(30));
+        
+        match timeout(timeout_duration, TcpStream::connect(addr)).await {
+            Ok(Ok(stream)) => {
+                let mut inner = self.inner.write().await;
+                inner.tcp_stream = Some(stream);
+                inner.state = ConnectionState::Established;
+                
+                // Set local endpoint based on actual connection
+                if let Ok(local_addr) = inner.tcp_stream.as_ref().unwrap().local_addr() {
+                    inner.local_endpoint = Some(LocalEndpoint {
+                        identifiers: vec![EndpointIdentifier::SocketAddress(local_addr)],
+                    });
+                }
+                
+                // Send any pending messages
+                let pending = inner.pending_messages.drain(..).collect::<Vec<_>>();
+                drop(inner); // Release lock before sending
+                
+                for msg in pending {
+                    self.send(msg).await?;
+                }
+                
+                // Signal Ready event
+                let _ = self.event_sender.send(ConnectionEvent::Ready);
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                let mut inner = self.inner.write().await;
+                inner.state = ConnectionState::Closed;
+                let _ = self.event_sender.send(ConnectionEvent::EstablishmentError(
+                    format!("Failed to connect: {}", e)
+                ));
+                Err(TransportServicesError::EstablishmentFailed(e.to_string()))
+            }
+            Err(_) => {
+                let mut inner = self.inner.write().await;
+                inner.state = ConnectionState::Closed;
+                let _ = self.event_sender.send(ConnectionEvent::EstablishmentError(
+                    "Connection timeout".to_string()
+                ));
+                Err(TransportServicesError::Timeout)
+            }
+        }
     }
 
     /// Get local endpoint information

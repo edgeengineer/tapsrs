@@ -19,3 +19,6 @@ pub use connection::Connection;
 pub use listener::Listener;
 pub use message::{Message, MessageContext};
 pub use error::{TransportServicesError, Result};
+
+#[cfg(test)]
+mod tests;

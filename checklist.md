@@ -56,10 +56,10 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 ## Phase 2: Connection Establishment (RFC Section 7, Establishing Connections)
 
-- [ ] Implement Active Open: `Preconnection.Initiate()` (**RFC Section 7.1, Active Open: Initiate**).
-    - [ ] Return a `Connection` object.
-    - [ ] Use `tokio::net::TcpStream::connect` and other Tokio APIs for the underlying network operations.
-    - [ ] Implement an event system (e.g., via FFI callbacks) to signal `Ready` or `EstablishmentError`.
+- [x] Implement Active Open: `Preconnection.Initiate()` (**RFC Section 7.1, Active Open: Initiate**).
+    - [x] Return a `Connection` object.
+    - [x] Use `tokio::net::TcpStream::connect` and other Tokio APIs for the underlying network operations.
+    - [x] Implement an event system (e.g., via FFI callbacks) to signal `Ready` or `EstablishmentError`.
 - [ ] Implement Passive Open: `Preconnection.Listen()` (**RFC Section 7.2, Passive Open: Listen**).
     - [ ] Return a `Listener` object.
     - [ ] Use `tokio::net::TcpListener` for asynchronous listening.
