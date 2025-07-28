@@ -132,33 +132,18 @@ impl FramerStack {
     }
     
     pub async fn parse_data(&self, data: &[u8]) -> Result<Vec<(Message, MessageContext)>> {
-        let mut current_data = data;
-        let mut temp_buffer = Vec::new();
-        
-        // Apply framers in order (first added runs first for inbound parsing)
-        for framer in &self.framers {
-            let parsed = framer.parse_data(current_data).await?;
-            
-            if parsed.is_empty() {
-                // No complete messages yet
-                return Ok(Vec::new());
-            }
-            
-            // For now, handle single message case
-            if let Some((message, _context)) = parsed.first() {
-                temp_buffer = message.data().to_vec();
-                current_data = &temp_buffer;
-            }
-        }
-        
-        // If we got here, parsing was successful
-        if let Some(framer) = self.framers.last() {
-            framer.parse_data(current_data).await
+        // For now, just use the first framer if available
+        if let Some(framer) = self.framers.first() {
+            framer.parse_data(data).await
         } else {
-            // No framers, return original data as message
-            let message = Message::from_bytes(current_data);
-            let context = MessageContext::new();
-            Ok(vec![(message, context)])
+            // No framers, return original data as message if not empty
+            if data.is_empty() {
+                Ok(Vec::new())
+            } else {
+                let message = Message::from_bytes(data);
+                let context = MessageContext::new();
+                Ok(vec![(message, context)])
+            }
         }
     }
     

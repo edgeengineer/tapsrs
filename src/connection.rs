@@ -15,12 +15,6 @@ use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use tokio::time::timeout;
 
-/// A receive request queued for processing
-struct ReceiveRequest {
-    min_incomplete_length: Option<usize>,
-    max_length: Option<usize>,
-    response_channel: tokio::sync::oneshot::Sender<Result<(Message, MessageContext)>>,
-}
 
 /// A Connection represents an instance of a transport Protocol Stack
 /// on which data can be sent to and/or received from a Remote Endpoint
@@ -52,8 +46,6 @@ struct ConnectionInner {
     framers: FramerStack,
     // Receive buffer for incoming data
     receive_buffer: Vec<u8>,
-    // Queue of pending receive requests
-    receive_queue: Vec<ReceiveRequest>,
 }
 
 impl Clone for Connection {
@@ -69,31 +61,6 @@ impl Clone for Connection {
 }
 
 impl Connection {
-    /// Create a new Connection (internal use)
-    pub(crate) fn new(preconnection: Preconnection, state: ConnectionState) -> Self {
-        let (event_sender, event_receiver) = mpsc::unbounded_channel();
-        
-        Self {
-            inner: Arc::new(RwLock::new(ConnectionInner {
-                preconnection,
-                state,
-                local_endpoint: None,
-                remote_endpoint: None,
-                transport_properties: TransportProperties::default(),
-                tcp_stream: None,
-                pending_messages: Vec::new(),
-                connection_group: None,
-                batch_mode: false,
-                batched_messages: Vec::new(),
-                next_message_id: Arc::new(AtomicU64::new(1)),
-                framers: FramerStack::new(),
-                receive_buffer: Vec::new(),
-                receive_queue: Vec::new(),
-            })),
-            event_sender,
-            event_receiver: Arc::new(RwLock::new(event_receiver)),
-        }
-    }
     
     /// Create a new Connection with pre-populated data (for initiate)
     pub(crate) fn new_with_data(
@@ -120,7 +87,6 @@ impl Connection {
                 next_message_id: Arc::new(AtomicU64::new(1)),
                 framers: FramerStack::new(), // Will be populated from preconnection async
                 receive_buffer: Vec::new(),
-                receive_queue: Vec::new(),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -282,7 +248,7 @@ impl Connection {
     /// maxLength: Maximum number of bytes to accept for a single message
     pub async fn receive_with_params(
         &self, 
-        min_incomplete_length: Option<usize>, 
+        _min_incomplete_length: Option<usize>, 
         max_length: Option<usize>
     ) -> Result<(Message, MessageContext)> {
         let state = {
@@ -405,101 +371,6 @@ impl Connection {
                 "Cannot receive on a closed connection".to_string()
             )),
         }
-    }
-    
-    /// Process the receive queue with available data
-    async fn process_receive_queue(&self) -> Result<()> {
-        loop {
-            let (has_request, has_data) = {
-                let inner = self.inner.read().await;
-                (!inner.receive_queue.is_empty(), !inner.receive_buffer.is_empty())
-            };
-            
-            if !has_request || !has_data {
-                break;
-            }
-            
-            let mut inner = self.inner.write().await;
-            if inner.receive_queue.is_empty() {
-                break;
-            }
-            
-            // Try to parse complete messages from buffer using framers
-            let parsed_messages = if !inner.framers.is_empty() {
-                inner.framers.parse_data(&inner.receive_buffer).await?
-            } else {
-                // No framers - treat entire buffer as one message if we have data
-                if !inner.receive_buffer.is_empty() {
-                    let message = Message::from_bytes(&inner.receive_buffer);
-                    let context = MessageContext::new();
-                    inner.receive_buffer.clear();
-                    vec![(message, context)]
-                } else {
-                    Vec::new()
-                }
-            };
-            
-            if parsed_messages.is_empty() {
-                // No complete messages yet, check if we can deliver partial data
-                if let Some(request) = inner.receive_queue.first() {
-                    if let Some(min_len) = request.min_incomplete_length {
-                        if inner.receive_buffer.len() >= min_len {
-                            // Deliver partial message
-                            let request = inner.receive_queue.remove(0);
-                            let max_len = request.max_length.unwrap_or(inner.receive_buffer.len());
-                            let data_len = std::cmp::min(max_len, inner.receive_buffer.len());
-                            
-                            let data = inner.receive_buffer.drain(..data_len).collect::<Vec<u8>>();
-                            let message = Message::from_bytes(&data);
-                            let context = MessageContext::new();
-                            
-                            // Send ReceivedPartial event
-                            let _ = self.event_sender.send(ConnectionEvent::ReceivedPartial {
-                                message_data: data.clone(),
-                                message_context: context.clone(),
-                                end_of_message: false,
-                            });
-                            
-                            let _ = request.response_channel.send(Ok((message, context)));
-                        }
-                    }
-                }
-                break;
-            }
-            
-            // Deliver complete messages
-            for (message, context) in parsed_messages {
-                if inner.receive_queue.is_empty() {
-                    break;
-                }
-                
-                let request = inner.receive_queue.remove(0);
-                
-                // Check max_length constraint
-                if let Some(max_len) = request.max_length {
-                    if message.data().len() > max_len {
-                        let _ = request.response_channel.send(Err(
-                            TransportServicesError::MessageTooLarge(format!(
-                                "Message size {} exceeds max length {}", 
-                                message.data().len(), 
-                                max_len
-                            ))
-                        ));
-                        continue;
-                    }
-                }
-                
-                // Send Received event
-                let _ = self.event_sender.send(ConnectionEvent::Received {
-                    message_data: message.data().to_vec(),
-                    message_context: context.clone(),
-                });
-                
-                let _ = request.response_channel.send(Ok((message, context)));
-            }
-        }
-        
-        Ok(())
     }
 
     /// Close the connection gracefully
@@ -754,90 +625,6 @@ impl Connection {
         // TODO: Implement group-wide abort
         // For now, just abort this connection
         self.abort().await
-    }
-    
-    /// Start the background TCP reading task
-    async fn start_reading_task(&self) -> Result<()> {
-        let connection = self.clone();
-        
-        tokio::spawn(async move {
-            let mut buffer = [0u8; 8192];
-            
-            loop {
-                // Check if connection is still active
-                let (has_stream, is_active) = {
-                    let inner = connection.inner.read().await;
-                    (inner.tcp_stream.is_some(), 
-                     inner.state == ConnectionState::Established || inner.state == ConnectionState::Establishing)
-                };
-                
-                if !has_stream || !is_active {
-                    break;
-                }
-                
-                // Read data from TCP stream - clone the stream to avoid holding the lock
-                let stream_clone = {
-                    let inner = connection.inner.read().await;
-                    if let Some(ref stream) = inner.tcp_stream {
-                        // Create a reference we can use - we need to restructure this to avoid deadlock
-                        true
-                    } else {
-                        false
-                    }
-                };
-                
-                if !stream_clone {
-                    break;
-                }
-                
-                // We need to approach this differently to avoid deadlocks
-                // For now, we'll use a simpler approach with a timeout to avoid holding locks
-                let read_result = tokio::time::timeout(Duration::from_millis(100), async {
-                    let mut inner = connection.inner.write().await;
-                    if let Some(ref mut stream) = inner.tcp_stream {
-                        stream.read(&mut buffer).await
-                    } else {
-                        Ok(0)
-                    }
-                }).await;
-                
-                let read_result = match read_result {
-                    Ok(result) => result,
-                    Err(_) => continue, // Timeout, try again
-                };
-                
-                match read_result {
-                    Ok(0) => {
-                        // Connection closed by peer
-                        let _ = connection.event_sender.send(ConnectionEvent::Closed);
-                        break;
-                    }
-                    Ok(n) => {
-                        // Add data to receive buffer
-                        {
-                            let mut inner = connection.inner.write().await;
-                            inner.receive_buffer.extend_from_slice(&buffer[..n]);
-                        }
-                        
-                        // Process any pending receive requests
-                        if let Err(e) = connection.process_receive_queue().await {
-                            let _ = connection.event_sender.send(ConnectionEvent::ReceiveError {
-                                error: e.to_string(),
-                            });
-                        }
-                    }
-                    Err(e) => {
-                        // Read error
-                        let _ = connection.event_sender.send(ConnectionEvent::ReceiveError {
-                            error: e.to_string(),
-                        });
-                        break;
-                    }
-                }
-            }
-        });
-        
-        Ok(())
     }
 
     // Internal method to update state

@@ -107,9 +107,29 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 ## Phase 4: Connection Management & Termination (RFC Section 8, Managing Connections & 10, Connection Termination)
 
 - [ ] Implement Connection Property management (**RFC Section 8.1, Generic Connection Properties**):
-    - [ ] `Connection.SetProperty()` and `Connection.GetProperties()`.
-    - [ ] Implement generic connection properties (e.g., `connTimeout` (**8.1.3, Timeout for Aborting Connection**), `connPriority` (**8.1.2, Connection Priority**)).
-    - [ ] Implement read-only properties (e.g., `connState` (**8.1.11.1, Connection State**), `canSend` (**8.1.11.2, Can Send Data**), `canReceive` (**8.1.11.3, Can Receive Data**)).
+    - [ ] `Connection.SetProperty()` and `Connection.GetProperties()` methods.
+    - [ ] Implement settable generic connection properties:
+        - [ ] `recvChecksumLen` - Required Minimum Corruption Protection Coverage for Receiving (**8.1.1, Required Minimum Corruption Protection Coverage for Receiving**)
+        - [ ] `connPriority` - Connection Priority (**8.1.2, Connection Priority**)
+        - [ ] `connTimeout` - Timeout for Aborting Connection (**8.1.3, Timeout for Aborting Connection**)
+        - [ ] `keepAliveTimeout` - Timeout for Keep-Alive Packets (**8.1.4, Timeout for Keep-Alive Packets**)
+        - [ ] `connScheduler` - Connection Group Transmission Scheduler (**8.1.5, Connection Group Transmission Scheduler**)
+        - [ ] `connCapacityProfile` - Capacity Profile (**8.1.6, Capacity Profile**)
+        - [ ] `multipathPolicy` - Policy for Using Multipath Transports (**8.1.7, Policy for Using Multipath Transports**)
+        - [ ] `minSendRate` / `minRecvRate` / `maxSendRate` / `maxRecvRate` - Bounds on Send or Receive Rate (**8.1.8, Bounds on Send or Receive Rate**)
+        - [ ] `groupConnLimit` - Group Connection Limit (**8.1.9, Group Connection Limit**)
+        - [ ] `isolateSession` - Isolate Session (**8.1.10, Isolate Session**)
+    - [ ] Implement read-only generic connection properties (**RFC Section 8.1.11, Read-Only Connection Properties**):
+        - [ ] `connState` - Connection State (**8.1.11.1, Connection State**)
+        - [ ] `canSend` - Can Send Data (**8.1.11.2, Can Send Data**)
+        - [ ] `canReceive` - Can Receive Data (**8.1.11.3, Can Receive Data**)
+        - [ ] `singularTransmissionMsgMaxLen` - Maximum Message Size Before Fragmentation or Segmentation (**8.1.11.4, Maximum Message Size Before Fragmentation or Segmentation**)
+        - [ ] `sendMsgMaxLen` - Maximum Message Size on Send (**8.1.11.5, Maximum Message Size on Send**)
+        - [ ] `recvMsgMaxLen` - Maximum Message Size on Receive (**8.1.11.6, Maximum Message Size on Receive**)
+    - [ ] Implement TCP-specific properties (**RFC Section 8.2, TCP-Specific Properties: User Timeout Option (UTO)**):
+        - [ ] `tcp.userTimeoutValue` - Advertised User Timeout (**8.2.1, Advertised User Timeout**)
+        - [ ] `tcp.userTimeoutEnabled` - User Timeout Enabled (**8.2.2, User Timeout Enabled**)
+        - [ ] `tcp.userTimeoutChangeable` - Timeout Changeable (**8.2.3, Timeout Changeable**)
 - [ ] Implement Connection Lifecycle Events via the event callback system (**RFC Section 8.3, Connection Lifecycle Events**):
     - [ ] `SoftError` (**8.3.1, Soft Errors**)
     - [ ] `PathChange` (**8.3.2, Path Change**)
