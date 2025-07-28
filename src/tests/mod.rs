@@ -43,4 +43,7 @@ mod settable_properties_tests;
 mod readonly_properties_tests;
 
 #[cfg(test)]
+mod tcp_properties_tests;
+
+#[cfg(test)]
 mod integration_tests;

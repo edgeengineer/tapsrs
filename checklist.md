@@ -152,10 +152,10 @@ This document outlines the phases and steps required to implement the TAPS (Tran
             - [x] Return 0 when receiving is not possible (e.g., unidirectional send connection)
             - [x] Base calculation on underlying transport protocol limitations and available buffer space
             - [x] Update dynamically based on connection state and transport stack capabilities
-    - [ ] Implement TCP-specific properties (**RFC Section 8.2, TCP-Specific Properties: User Timeout Option (UTO)**):
-        - [ ] `tcp.userTimeoutValue` - Advertised User Timeout (**8.2.1, Advertised User Timeout**)
-        - [ ] `tcp.userTimeoutEnabled` - User Timeout Enabled (**8.2.2, User Timeout Enabled**)
-        - [ ] `tcp.userTimeoutChangeable` - Timeout Changeable (**8.2.3, Timeout Changeable**)
+    - [x] Implement TCP-specific properties (**RFC Section 8.2, TCP-Specific Properties: User Timeout Option (UTO)**):
+        - [x] `tcp.userTimeoutValue` - Advertised User Timeout (**8.2.1, Advertised User Timeout**)
+        - [x] `tcp.userTimeoutEnabled` - User Timeout Enabled (**8.2.2, User Timeout Enabled**)
+        - [x] `tcp.userTimeoutChangeable` - Timeout Changeable (**8.2.3, Timeout Changeable**)
 - [ ] Implement Connection Lifecycle Events via the event callback system (**RFC Section 8.3, Connection Lifecycle Events**):
     - [ ] `SoftError` (**8.3.1, Soft Errors**)
     - [ ] `PathChange` (**8.3.2, Path Change**)

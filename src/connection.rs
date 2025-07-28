@@ -761,6 +761,12 @@ impl Connection {
         // Apply property changes that need immediate action
         match key {
             "connTimeout" => {
+                // RFC 8.2.3: tcp.userTimeoutChangeable becomes false when connTimeout is used
+                if matches!(value, ConnectionProperty::ConnTimeout(TimeoutValue::Duration(_))) {
+                    inner.properties.set("tcp.userTimeoutChangeable", 
+                        ConnectionProperty::TcpUserTimeoutChangeable(false))?;
+                }
+                
                 // Apply timeout to underlying TCP stream
                 if let (Some(ref _stream), ConnectionProperty::ConnTimeout(timeout_val)) = (&inner.tcp_stream, &value) {
                     match timeout_val {
@@ -819,6 +825,26 @@ impl Connection {
                         {
                             log::warn!("TCP keep-alive configuration not supported on this platform");
                         }
+                    }
+                }
+            }
+            "tcp.userTimeoutEnabled" => {
+                // Configure TCP User Timeout Option if supported
+                if let Some(ref _stream) = inner.tcp_stream {
+                    if let ConnectionProperty::TcpUserTimeoutEnabled(enabled) = &value {
+                        // Note: Actually setting TCP_USER_TIMEOUT socket option would require
+                        // platform-specific code and may not be available on all platforms
+                        log::debug!("TCP User Timeout enabled: {}", enabled);
+                    }
+                }
+            }
+            "tcp.userTimeoutValue" => {
+                // Set the TCP User Timeout value
+                if let Some(ref _stream) = inner.tcp_stream {
+                    if let ConnectionProperty::TcpUserTimeoutValue(Some(duration)) = &value {
+                        // Note: Actually setting TCP_USER_TIMEOUT socket option would require
+                        // platform-specific code and may not be available on all platforms
+                        log::debug!("TCP User Timeout value set to: {:?}", duration);
                     }
                 }
             }

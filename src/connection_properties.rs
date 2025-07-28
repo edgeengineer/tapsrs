@@ -211,6 +211,7 @@ impl ConnectionProperties {
             ConnectionProperty::IsolateSession(false)); // Default: false
         
         // TCP-specific defaults
+        // tcp.userTimeoutValue defaults to None (use TCP default)
         properties.insert("tcp.userTimeoutEnabled".to_string(), 
             ConnectionProperty::TcpUserTimeoutEnabled(false)); // Default: false
         properties.insert("tcp.userTimeoutChangeable".to_string(), 
