@@ -8,7 +8,7 @@ async fn test_new_preconnection() {
         TransportProperties::default(),
         SecurityParameters::default(),
     );
-    
+
     assert!(preconn.resolve().await.is_ok());
 }
 
@@ -18,19 +18,19 @@ async fn test_preconnection_with_endpoints() {
         .interface("lo0")
         .port(0) // Let system choose port
         .build();
-        
+
     let remote = RemoteEndpoint::builder()
         .ip_address("127.0.0.1".parse().unwrap())
         .port(8080)
         .build();
-    
+
     let preconn = new_preconnection(
         vec![local],
         vec![remote],
         TransportProperties::default(),
         SecurityParameters::default(),
     );
-    
+
     let (locals, remotes) = preconn.resolve().await.unwrap();
     assert_eq!(locals.len(), 1);
     assert_eq!(remotes.len(), 1);
@@ -44,10 +44,10 @@ async fn test_initiate_without_remote_endpoint_fails() {
         TransportProperties::default(),
         SecurityParameters::default(),
     );
-    
+
     let result = preconn.initiate().await;
     assert!(result.is_err());
-    
+
     if let Err(e) = result {
         match e {
             TransportServicesError::InvalidParameters(msg) => {
@@ -65,25 +65,23 @@ async fn test_preconnection_builder_pattern() {
             .hostname("example.com")
             .port(443)
             .service("https")
-            .build()
+            .build(),
     );
-    
+
     // Add local endpoint
-    preconn.add_local(
-        LocalEndpoint::builder()
-            .interface("en0")
-            .build()
-    ).await;
-    
+    preconn
+        .add_local(LocalEndpoint::builder().interface("en0").build())
+        .await;
+
     // Set transport properties
     let props = TransportProperties::builder()
         .reliability(Preference::Require)
         .preserve_order(Preference::Require)
         .congestion_control(Preference::Require)
         .build();
-        
+
     preconn.set_transport_properties(props).await;
-    
+
     // Verify we can resolve endpoints
     let (locals, remotes) = preconn.resolve().await.unwrap();
     assert_eq!(locals.len(), 1);
@@ -97,7 +95,7 @@ async fn test_security_parameters() {
         .hostname("example.com")
         .port(443)
         .build();
-        
+
     // Test with disabled security
     let preconn = new_preconnection(
         vec![],
@@ -106,7 +104,7 @@ async fn test_security_parameters() {
         SecurityParameters::new_disabled(),
     );
     assert!(preconn.resolve().await.is_ok());
-    
+
     // Test with opportunistic security
     let preconn = new_preconnection(
         vec![],
@@ -115,7 +113,7 @@ async fn test_security_parameters() {
         SecurityParameters::new_opportunistic(),
     );
     assert!(preconn.resolve().await.is_ok());
-    
+
     // Test with custom security parameters
     let mut sec_params = SecurityParameters::new();
     sec_params.set(
@@ -126,7 +124,7 @@ async fn test_security_parameters() {
         SecurityParameter::Alpn,
         SecurityParameterValue::Strings(vec!["h2".to_string(), "http/1.1".to_string()]),
     );
-    
+
     let preconn = new_preconnection(
         vec![],
         vec![remote],

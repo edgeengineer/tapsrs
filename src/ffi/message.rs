@@ -13,10 +13,10 @@ pub unsafe extern "C" fn transport_services_message_new(
     if data.is_null() || length == 0 {
         return std::ptr::null_mut();
     }
-    
+
     let data_slice = slice::from_raw_parts(data, length);
     let message = Message::new(data_slice.to_vec());
-    
+
     to_handle(Box::new(message))
 }
 
@@ -29,10 +29,10 @@ pub unsafe extern "C" fn transport_services_message_get_data(
     if handle.is_null() || length.is_null() {
         return std::ptr::null();
     }
-    
+
     let message = handle_ref::<Message>(handle);
     let data = message.data();
-    
+
     *length = data.len();
     data.as_ptr()
 }
@@ -46,10 +46,10 @@ pub unsafe extern "C" fn transport_services_message_set_priority(
     if handle.is_null() {
         return types::TransportServicesError::InvalidParameters;
     }
-    
+
     let message = handle_mut::<Message>(handle);
     message.properties_mut().priority = Some(priority);
-    
+
     types::TransportServicesError::Success
 }
 
@@ -62,10 +62,10 @@ pub unsafe extern "C" fn transport_services_message_set_lifetime(
     if handle.is_null() {
         return types::TransportServicesError::InvalidParameters;
     }
-    
+
     let message = handle_mut::<Message>(handle);
     message.properties_mut().lifetime = Some(std::time::Duration::from_millis(lifetime_ms));
-    
+
     types::TransportServicesError::Success
 }
 
@@ -78,10 +78,10 @@ pub unsafe extern "C" fn transport_services_message_set_idempotent(
     if handle.is_null() {
         return types::TransportServicesError::InvalidParameters;
     }
-    
+
     let message = handle_mut::<Message>(handle);
     message.properties_mut().idempotent = idempotent;
-    
+
     types::TransportServicesError::Success
 }
 

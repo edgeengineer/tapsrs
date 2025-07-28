@@ -2,21 +2,20 @@
 //! Based on RFC 9622 Section 3 (API Summary) and Section 8 (Managing Connections)
 
 use crate::{
-    Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
-    TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
-    EndpointIdentifier, ConnectionGroup, ConnectionGroupId, FramerStack,
-    ConnectionProperties, ConnectionProperty, TimeoutValue, CommunicationDirection, Preference,
+    CommunicationDirection, ConnectionEvent, ConnectionGroup, ConnectionGroupId,
+    ConnectionProperties, ConnectionProperty, ConnectionState, EndpointIdentifier, FramerStack,
+    LocalEndpoint, Message, MessageContext, Preconnection, Preference, RemoteEndpoint, Result,
+    TimeoutValue, TransportProperties, TransportServicesError,
 };
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::net::SocketAddr;
-use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, mpsc};
-use tokio::net::TcpStream;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use tokio::time::timeout;
 use socket2::Socket;
-
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::{mpsc, RwLock};
+use tokio::time::timeout;
 
 /// A Connection represents an instance of a transport Protocol Stack
 /// on which data can be sent to and/or received from a Remote Endpoint
@@ -69,7 +68,6 @@ impl Clone for Connection {
 }
 
 impl Connection {
-    
     /// Create a new Connection with pre-populated data (for initiate)
     pub(crate) fn new_with_data(
         preconnection: Preconnection,
@@ -79,7 +77,7 @@ impl Connection {
         transport_properties: TransportProperties,
     ) -> Self {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
-        
+
         Self {
             inner: Arc::new(RwLock::new(ConnectionInner {
                 preconnection,
@@ -118,22 +116,22 @@ impl Connection {
             let id = self.get_next_message_id().await;
             message = message.with_id(id);
         }
-        
+
         // Check if message has expired
         if let Some(context) = message.send_context() {
             if let Some(expiry) = context.expiry {
                 if Instant::now() >= expiry {
                     // Notify about expiration
-                    let _ = self.event_sender.send(ConnectionEvent::Expired { 
-                        message_id: message.id() 
+                    let _ = self.event_sender.send(ConnectionEvent::Expired {
+                        message_id: message.id(),
                     });
                     return Err(TransportServicesError::MessageExpired);
                 }
             }
         }
-        
+
         let mut inner = self.inner.write().await;
-        
+
         match inner.state {
             ConnectionState::Established => {
                 if inner.batch_mode {
@@ -152,20 +150,20 @@ impl Connection {
                 Ok(())
             }
             _ => Err(TransportServicesError::InvalidState(
-                "Cannot send on a closed connection".to_string()
+                "Cannot send on a closed connection".to_string(),
             )),
         }
     }
-    
+
     /// Internal method to actually send a message
     async fn send_message_internal(&self, message: Message) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         // Check if this is a Final message
         if message.properties().final_message {
             inner.final_message_sent = true;
         }
-        
+
         // Frame the message if framers are available
         let data_to_send = if !inner.framers.is_empty() {
             let context = MessageContext::new(); // Use MessageContext for framing
@@ -173,66 +171,71 @@ impl Connection {
         } else {
             message.data().to_vec()
         };
-        
+
         if let Some(ref mut stream) = inner.tcp_stream {
             let message_id = message.id();
             let event_sender = self.event_sender.clone();
-            
+
             // Send the message
             match stream.write_all(&data_to_send).await {
                 Ok(_) => {
                     match stream.flush().await {
                         Ok(_) => {
                             // Notify successful send
-                            let _ = event_sender.send(ConnectionEvent::Sent { 
-                                message_id 
-                            });
+                            let _ = event_sender.send(ConnectionEvent::Sent { message_id });
                             Ok(())
                         }
                         Err(e) => {
                             let error_msg = e.to_string();
-                            let _ = event_sender.send(ConnectionEvent::SendError { 
+                            let _ = event_sender.send(ConnectionEvent::SendError {
                                 message_id,
-                                error: error_msg.clone()
+                                error: error_msg.clone(),
                             });
-                            
+
                             // Check if this might be a soft error
-                            if error_msg.contains("broken pipe") || 
-                               error_msg.contains("connection reset") ||
-                               error_msg.contains("connection refused") {
+                            if error_msg.contains("broken pipe")
+                                || error_msg.contains("connection reset")
+                                || error_msg.contains("connection refused")
+                            {
                                 drop(inner);
-                                self.emit_soft_error(format!("Network error during flush: {}", error_msg)).await;
+                                self.emit_soft_error(format!(
+                                    "Network error during flush: {}",
+                                    error_msg
+                                ))
+                                .await;
                             }
-                            
+
                             Err(TransportServicesError::SendFailed(error_msg))
                         }
                     }
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    let _ = event_sender.send(ConnectionEvent::SendError { 
+                    let _ = event_sender.send(ConnectionEvent::SendError {
                         message_id,
-                        error: error_msg.clone()
+                        error: error_msg.clone(),
                     });
-                    
+
                     // Check if this might be a soft error (network-related)
-                    if error_msg.contains("broken pipe") || 
-                       error_msg.contains("connection reset") ||
-                       error_msg.contains("connection refused") {
+                    if error_msg.contains("broken pipe")
+                        || error_msg.contains("connection reset")
+                        || error_msg.contains("connection refused")
+                    {
                         drop(inner);
-                        self.emit_soft_error(format!("Network error during send: {}", error_msg)).await;
+                        self.emit_soft_error(format!("Network error during send: {}", error_msg))
+                            .await;
                     }
-                    
+
                     Err(TransportServicesError::SendFailed(error_msg))
                 }
             }
         } else {
             Err(TransportServicesError::InvalidState(
-                "No active stream".to_string()
+                "No active stream".to_string(),
             ))
         }
     }
-    
+
     /// Start batching messages
     /// RFC Section 9.2.4
     pub async fn start_batch(&self) -> Result<()> {
@@ -240,7 +243,7 @@ impl Connection {
         inner.batch_mode = true;
         Ok(())
     }
-    
+
     /// End batching and send all batched messages
     /// RFC Section 9.2.4
     pub async fn end_batch(&self) -> Result<()> {
@@ -248,26 +251,28 @@ impl Connection {
         inner.batch_mode = false;
         let messages = inner.batched_messages.drain(..).collect::<Vec<_>>();
         drop(inner);
-        
+
         // Send all batched messages
         for message in messages {
             self.send_message_internal(message).await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Get the next message ID
     async fn get_next_message_id(&self) -> u64 {
         let inner = self.inner.read().await;
         inner.next_message_id.fetch_add(1, Ordering::SeqCst)
     }
-    
+
     /// Use length-prefix framer for messages
     pub async fn use_length_prefix_framer(&self) -> Result<()> {
         use crate::LengthPrefixFramer;
         let mut inner = self.inner.write().await;
-        inner.framers.add_framer(Box::new(LengthPrefixFramer::new()));
+        inner
+            .framers
+            .add_framer(Box::new(LengthPrefixFramer::new()));
         Ok(())
     }
 
@@ -276,32 +281,32 @@ impl Connection {
     pub async fn receive(&self) -> Result<(Message, MessageContext)> {
         self.receive_with_params(None, None).await
     }
-    
+
     /// Receive messages with buffer management parameters
     /// RFC Section 9.3.1 - Enqueuing Receives
-    /// 
+    ///
     /// minIncompleteLength: Minimum number of bytes to deliver for a partial message
     /// maxLength: Maximum number of bytes to accept for a single message
     pub async fn receive_with_params(
-        &self, 
-        _min_incomplete_length: Option<usize>, 
-        max_length: Option<usize>
+        &self,
+        _min_incomplete_length: Option<usize>,
+        max_length: Option<usize>,
     ) -> Result<(Message, MessageContext)> {
         let state = {
             let inner = self.inner.read().await;
             inner.state
         };
-        
+
         match state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 // Keep reading until we have a complete message
                 let mut buffer = [0u8; 8192];
-                
+
                 loop {
                     // Check if we have a complete message in the buffer already
                     let (has_complete_message, result) = {
                         let mut inner = self.inner.write().await;
-                        
+
                         if inner.receive_buffer.is_empty() {
                             (false, None)
                         } else if !inner.framers.is_empty() {
@@ -309,8 +314,13 @@ impl Connection {
                             // Since we have length-prefix framing, let's implement simple length-prefix parsing here
                             if inner.receive_buffer.len() >= 4 {
                                 let len_bytes = &inner.receive_buffer[0..4];
-                                let expected_len = u32::from_be_bytes([len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]]) as usize;
-                                
+                                let expected_len = u32::from_be_bytes([
+                                    len_bytes[0],
+                                    len_bytes[1],
+                                    len_bytes[2],
+                                    len_bytes[3],
+                                ]) as usize;
+
                                 if inner.receive_buffer.len() >= 4 + expected_len {
                                     // We have a complete message
                                     let message_data = &inner.receive_buffer[4..4 + expected_len];
@@ -318,18 +328,23 @@ impl Connection {
                                     let mut context = MessageContext::new();
                                     // Set remote endpoint if available
                                     context.remote_endpoint = inner.remote_endpoint.clone();
-                                    
+
                                     // Remove the processed message from buffer
                                     inner.receive_buffer.drain(..4 + expected_len);
-                                    
+
                                     // Check max_length constraint
                                     if let Some(max_len) = max_length {
                                         if message.data().len() > max_len {
-                                            (true, Some(Err(TransportServicesError::MessageTooLarge(format!(
-                                                "Message size {} exceeds max length {}", 
-                                                message.data().len(), 
-                                                max_len
-                                            )))))
+                                            (
+                                                true,
+                                                Some(Err(TransportServicesError::MessageTooLarge(
+                                                    format!(
+                                                        "Message size {} exceeds max length {}",
+                                                        message.data().len(),
+                                                        max_len
+                                                    ),
+                                                ))),
+                                            )
                                         } else {
                                             (true, Some(Ok((message, context))))
                                         }
@@ -352,7 +367,7 @@ impl Connection {
                             (true, Some(Ok((message, context))))
                         }
                     };
-                    
+
                     if has_complete_message {
                         if let Some(result) = result {
                             match result {
@@ -362,31 +377,35 @@ impl Connection {
                                         message_data: message.data().to_vec(),
                                         message_context: context.clone(),
                                     });
-                                    
+
                                     return Ok((message, context));
                                 }
                                 Err(e) => return Err(e),
                             }
                         }
                     }
-                    
+
                     // No complete message yet - read more data
                     let read_result = {
                         let mut inner = self.inner.write().await;
                         if let Some(ref mut stream) = inner.tcp_stream {
                             stream.read(&mut buffer).await
                         } else {
-                            return Err(TransportServicesError::InvalidState("No active stream".to_string()));
+                            return Err(TransportServicesError::InvalidState(
+                                "No active stream".to_string(),
+                            ));
                         }
                     };
-                    
+
                     match read_result {
                         Ok(0) => {
                             // Connection closed by peer
                             let mut inner = self.inner.write().await;
                             inner.state = ConnectionState::Closed;
                             let _ = self.event_sender.send(ConnectionEvent::Closed);
-                            return Err(TransportServicesError::ConnectionFailed("Connection closed by peer".to_string()));
+                            return Err(TransportServicesError::ConnectionFailed(
+                                "Connection closed by peer".to_string(),
+                            ));
                         }
                         Ok(n) => {
                             // Add data to receive buffer
@@ -399,22 +418,27 @@ impl Connection {
                             let _ = self.event_sender.send(ConnectionEvent::ReceiveError {
                                 error: error_msg.clone(),
                             });
-                            
+
                             // Check if this might be a soft error
-                            if error_msg.contains("broken pipe") || 
-                               error_msg.contains("connection reset") ||
-                               error_msg.contains("connection refused") ||
-                               error_msg.contains("timed out") {
-                                self.emit_soft_error(format!("Network error during receive: {}", error_msg)).await;
+                            if error_msg.contains("broken pipe")
+                                || error_msg.contains("connection reset")
+                                || error_msg.contains("connection refused")
+                                || error_msg.contains("timed out")
+                            {
+                                self.emit_soft_error(format!(
+                                    "Network error during receive: {}",
+                                    error_msg
+                                ))
+                                .await;
                             }
-                            
+
                             return Err(TransportServicesError::ReceiveFailed(error_msg));
                         }
                     }
                 }
             }
             _ => Err(TransportServicesError::InvalidState(
-                "Cannot receive on a closed connection".to_string()
+                "Cannot receive on a closed connection".to_string(),
             )),
         }
     }
@@ -423,55 +447,50 @@ impl Connection {
     /// RFC Section 10
     pub async fn close(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 inner.state = ConnectionState::Closing;
-                
+
                 // If this connection is part of a group, decrement the connection count
                 if let Some(ref group) = inner.connection_group {
                     group.remove_connection();
                 }
-                
+
                 // Send any pending batched messages before closing
                 let batched_messages = inner.batched_messages.drain(..).collect::<Vec<_>>();
-                
+
                 // Perform graceful close on TCP stream
                 if let Some(ref mut stream) = inner.tcp_stream {
                     // Try to flush any buffered data (ignore errors if connection is broken)
-                    let _ = tokio::time::timeout(
-                        Duration::from_secs(1),
-                        stream.flush()
-                    ).await;
-                    
+                    let _ = tokio::time::timeout(Duration::from_secs(1), stream.flush()).await;
+
                     // Try to shutdown the write side (ignore errors if connection is broken)
                     // This sends a TCP FIN packet
-                    let _ = tokio::time::timeout(
-                        Duration::from_secs(1),
-                        stream.shutdown()
-                    ).await;
+                    let _ = tokio::time::timeout(Duration::from_secs(1), stream.shutdown()).await;
                 }
-                
+
                 // Drop the write lock to send batched messages
                 drop(inner);
-                
+
                 // Send any remaining batched messages (with timeout to avoid hanging)
                 for message in batched_messages {
                     let _ = tokio::time::timeout(
                         Duration::from_millis(100),
-                        self.send_message_internal(message)
-                    ).await;
+                        self.send_message_internal(message),
+                    )
+                    .await;
                 }
-                
+
                 // Re-acquire lock to update state
                 let mut inner = self.inner.write().await;
                 inner.state = ConnectionState::Closed;
-                
+
                 // Clear any remaining state
                 inner.pending_messages.clear();
                 inner.receive_buffer.clear();
                 inner.tcp_stream = None;
-                
+
                 let _ = self.event_sender.send(ConnectionEvent::Closed);
                 Ok(())
             }
@@ -485,43 +504,43 @@ impl Connection {
 
     /// Abort the connection immediately
     /// RFC Section 10 - Connection Termination
-    /// 
+    ///
     /// Unlike close(), abort() immediately terminates the connection without
     /// attempting to deliver any outstanding data.
     pub async fn abort(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         // Only proceed if we're not already closed
         let was_not_closed = inner.state != ConnectionState::Closed;
         if !was_not_closed {
             return Ok(());
         }
-        
+
         // Immediately set state to Closed
         inner.state = ConnectionState::Closed;
-        
+
         // Force close the TCP stream if it exists
         if let Some(stream) = inner.tcp_stream.take() {
             // Drop the stream to force immediate closure
             // This will send a TCP RST instead of graceful FIN
             drop(stream);
         }
-        
+
         // Clear any pending messages since we're aborting
         inner.pending_messages.clear();
         inner.batched_messages.clear();
         inner.receive_buffer.clear();
-        
+
         // If this connection is part of a group, decrement the connection count
         if let Some(ref group) = inner.connection_group {
             group.remove_connection();
         }
-        
+
         // Send ConnectionError event for abort (as per RFC Section 10)
         let _ = self.event_sender.send(ConnectionEvent::ConnectionError(
-            "Connection aborted".to_string()
+            "Connection aborted".to_string(),
         ));
-        
+
         Ok(())
     }
 
@@ -529,7 +548,7 @@ impl Connection {
     /// RFC Section 7.4
     pub async fn clone_connection(&self) -> Result<Connection> {
         let inner = self.inner.read().await;
-        
+
         match inner.state {
             ConnectionState::Established => {
                 // Get or create connection group
@@ -539,16 +558,24 @@ impl Connection {
                     // Create a new connection group for this connection
                     let new_group = Arc::new(ConnectionGroup::new(
                         inner.transport_properties.clone(),
-                        inner.local_endpoint.as_ref().map(|e| vec![e.clone()]).unwrap_or_default(),
-                        inner.remote_endpoint.as_ref().map(|e| vec![e.clone()]).unwrap_or_default(),
+                        inner
+                            .local_endpoint
+                            .as_ref()
+                            .map(|e| vec![e.clone()])
+                            .unwrap_or_default(),
+                        inner
+                            .remote_endpoint
+                            .as_ref()
+                            .map(|e| vec![e.clone()])
+                            .unwrap_or_default(),
                     ));
                     (new_group, true)
                 };
-                
+
                 // Get preconnection before dropping inner
                 let preconn = inner.preconnection.clone();
                 drop(inner);
-                
+
                 // Update the original connection to be part of the group if it wasn't already
                 if was_not_grouped {
                     let mut inner_mut = self.inner.write().await;
@@ -559,29 +586,31 @@ impl Connection {
                     // Register this connection with the group
                     group.register_connection(Arc::downgrade(&self.inner)).await;
                 }
-                
+
                 // Create a new connection in the same group
                 let new_conn = preconn.initiate().await?;
-                
+
                 // Set the connection group on the new connection
                 {
                     let mut new_inner = new_conn.inner.write().await;
                     new_inner.connection_group = Some(Arc::clone(&group));
-                    
+
                     // Share transport properties from the group
                     let shared_props = group.transport_properties.read().await;
                     new_inner.transport_properties = shared_props.clone();
                 }
-                
+
                 // Increment connection count for the new connection
                 group.add_connection();
                 // Register the new connection with the group
-                group.register_connection(Arc::downgrade(&new_conn.inner)).await;
-                
+                group
+                    .register_connection(Arc::downgrade(&new_conn.inner))
+                    .await;
+
                 Ok(new_conn)
             }
             _ => Err(TransportServicesError::InvalidState(
-                "Can only clone established connections".to_string()
+                "Can only clone established connections".to_string(),
             )),
         }
     }
@@ -590,13 +619,13 @@ impl Connection {
     /// RFC Section 7.5
     pub async fn add_remote(&self, endpoint: RemoteEndpoint) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 // For single-path TCP connections, we can only have one remote endpoint
                 // In a real implementation with multipath support (like MPTCP or QUIC),
                 // we would add this to a list of available endpoints
-                
+
                 // Check if this is the same endpoint we already have
                 if let Some(ref current_remote) = inner.remote_endpoint {
                     // Check if any identifiers match
@@ -609,17 +638,17 @@ impl Connection {
                         }
                     }
                 }
-                
+
                 // For now, since we only support single-path TCP, we can only
                 // update the remote endpoint if we don't have an established connection yet
                 if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
                     // Update the remote endpoint for future connection attempts
                     inner.remote_endpoint = Some(endpoint);
                     drop(inner);
-                    
+
                     // Emit PathChange event since endpoints changed
                     self.emit_path_change().await;
-                    
+
                     Ok(())
                 } else {
                     // Log that we received the endpoint but can't use it with current transport
@@ -627,13 +656,13 @@ impl Connection {
                     // 1. Store this endpoint in a list
                     // 2. Potentially establish a new subflow to this endpoint
                     // 3. Update routing tables
-                    
+
                     // For now, we just acknowledge receipt but don't use it
                     Ok(())
                 }
             }
             _ => Err(TransportServicesError::InvalidState(
-                "Cannot add endpoints to a closed connection".to_string()
+                "Cannot add endpoints to a closed connection".to_string(),
             )),
         }
     }
@@ -641,13 +670,13 @@ impl Connection {
     /// Add a local endpoint to the connection
     pub async fn add_local(&self, endpoint: LocalEndpoint) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 // For single-path TCP connections, we can only have one local endpoint
                 // In a real implementation with multipath support (like MPTCP or QUIC),
                 // we would add this to a list of available endpoints
-                
+
                 // Check if this is the same endpoint we already have
                 if let Some(ref current_local) = inner.local_endpoint {
                     // Check if any identifiers match
@@ -660,30 +689,30 @@ impl Connection {
                         }
                     }
                 }
-                
+
                 // For now, since we only support single-path TCP, we can only
                 // update the local endpoint if we don't have an established connection yet
                 if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
                     // Update the local endpoint for future connection attempts
                     inner.local_endpoint = Some(endpoint);
                     drop(inner);
-                    
+
                     // Emit PathChange event since endpoints changed
                     self.emit_path_change().await;
-                    
+
                     Ok(())
                 } else {
                     // In a multipath implementation, we would:
                     // 1. Store this endpoint in a list
                     // 2. Potentially bind a new socket to this endpoint
                     // 3. Use it for new subflows
-                    
+
                     // For now, we just acknowledge receipt but don't use it
                     Ok(())
                 }
             }
             _ => Err(TransportServicesError::InvalidState(
-                "Cannot add endpoints to a closed connection".to_string()
+                "Cannot add endpoints to a closed connection".to_string(),
             )),
         }
     }
@@ -693,7 +722,7 @@ impl Connection {
         let mut receiver = self.event_receiver.write().await;
         receiver.recv().await
     }
-    
+
     /// Internal method to establish TCP connection
     pub(crate) async fn establish_tcp(
         &self,
@@ -701,32 +730,32 @@ impl Connection {
         connection_timeout: Option<Duration>,
     ) -> Result<()> {
         let timeout_duration = connection_timeout.unwrap_or(Duration::from_secs(30));
-        
+
         match timeout(timeout_duration, TcpStream::connect(addr)).await {
             Ok(Ok(stream)) => {
                 let mut inner = self.inner.write().await;
                 inner.tcp_stream = Some(stream);
                 inner.state = ConnectionState::Established;
-                
+
                 // Set local endpoint based on actual connection
                 if let Ok(local_addr) = inner.tcp_stream.as_ref().unwrap().local_addr() {
                     inner.local_endpoint = Some(LocalEndpoint {
                         identifiers: vec![EndpointIdentifier::SocketAddress(local_addr)],
                     });
                 }
-                
+
                 // Send any pending messages
                 let pending = inner.pending_messages.drain(..).collect::<Vec<_>>();
                 drop(inner); // Release lock before sending
-                
+
                 for msg in pending {
                     // Use send_message_internal to avoid re-queuing
                     self.send_message_internal(msg).await?;
                 }
-                
+
                 // Start background reading task
                 self.start_reading_task().await?;
-                
+
                 // Signal Ready event
                 let _ = self.event_sender.send(ConnectionEvent::Ready);
                 Ok(())
@@ -734,16 +763,19 @@ impl Connection {
             Ok(Err(e)) => {
                 let mut inner = self.inner.write().await;
                 inner.state = ConnectionState::Closed;
-                let _ = self.event_sender.send(ConnectionEvent::EstablishmentError(
-                    format!("Failed to connect: {}", e)
-                ));
+                let _ = self
+                    .event_sender
+                    .send(ConnectionEvent::EstablishmentError(format!(
+                        "Failed to connect: {}",
+                        e
+                    )));
                 Err(TransportServicesError::EstablishmentFailed(e.to_string()))
             }
             Err(_) => {
                 let mut inner = self.inner.write().await;
                 inner.state = ConnectionState::Closed;
                 let _ = self.event_sender.send(ConnectionEvent::EstablishmentError(
-                    "Connection timeout".to_string()
+                    "Connection timeout".to_string(),
                 ));
                 Err(TransportServicesError::Timeout)
             }
@@ -766,7 +798,7 @@ impl Connection {
     /// RFC Section 8: Connection.SetProperty(property, value)
     pub async fn set_property(&self, key: &str, value: ConnectionProperty) -> Result<()> {
         let mut inner = self.inner.write().await;
-        
+
         // For properties in a connection group, update all connections
         if let Some(ref group) = inner.connection_group {
             // connPriority is not shared across the group (per RFC)
@@ -775,13 +807,13 @@ impl Connection {
                 let group_clone = Arc::clone(group);
                 let key_clone = key.to_string();
                 let value_clone = value.clone();
-                
+
                 // Release the lock before updating other connections
                 drop(inner);
-                
+
                 // Get all connections in the group
                 let connections = group_clone.get_connections().await;
-                
+
                 // Update property on all connections in parallel
                 let mut update_tasks = Vec::new();
                 for conn_inner in connections {
@@ -793,31 +825,38 @@ impl Connection {
                     });
                     update_tasks.push(task);
                 }
-                
+
                 // Wait for all updates
                 for task in update_tasks {
                     let _ = task.await;
                 }
-                
+
                 // Re-acquire lock to update this connection
                 inner = self.inner.write().await;
             }
         }
-        
+
         // Set the property on this connection
         inner.properties.set(key, value.clone())?;
-        
+
         // Apply property changes that need immediate action
         match key {
             "connTimeout" => {
                 // RFC 8.2.3: tcp.userTimeoutChangeable becomes false when connTimeout is used
-                if matches!(value, ConnectionProperty::ConnTimeout(TimeoutValue::Duration(_))) {
-                    inner.properties.set("tcp.userTimeoutChangeable", 
-                        ConnectionProperty::TcpUserTimeoutChangeable(false))?;
+                if matches!(
+                    value,
+                    ConnectionProperty::ConnTimeout(TimeoutValue::Duration(_))
+                ) {
+                    inner.properties.set(
+                        "tcp.userTimeoutChangeable",
+                        ConnectionProperty::TcpUserTimeoutChangeable(false),
+                    )?;
                 }
-                
+
                 // Apply timeout to underlying TCP stream
-                if let (Some(ref _stream), ConnectionProperty::ConnTimeout(timeout_val)) = (&inner.tcp_stream, &value) {
+                if let (Some(ref _stream), ConnectionProperty::ConnTimeout(timeout_val)) =
+                    (&inner.tcp_stream, &value)
+                {
                     match timeout_val {
                         TimeoutValue::Duration(duration) => {
                             // TCP connection timeout is handled at the application level
@@ -837,19 +876,19 @@ impl Connection {
                         // Get the raw socket to set keep-alive options
                         #[cfg(unix)]
                         {
-                            use std::os::unix::io::{AsRawFd, FromRawFd};
                             use socket2::{Socket, TcpKeepalive};
-                            
+                            use std::os::unix::io::{AsRawFd, FromRawFd};
+
                             let fd = stream.as_raw_fd();
                             let socket = unsafe { Socket::from_raw_fd(fd) };
-                            
+
                             match timeout_val {
                                 TimeoutValue::Duration(duration) => {
                                     // Enable keep-alive with the specified interval
                                     let keepalive = TcpKeepalive::new()
                                         .with_time(*duration)
                                         .with_interval(*duration);
-                                    
+
                                     if let Err(e) = socket.set_tcp_keepalive(&keepalive) {
                                         log::warn!("Failed to set TCP keep-alive: {}", e);
                                     } else {
@@ -865,14 +904,16 @@ impl Connection {
                                     }
                                 }
                             }
-                            
+
                             // Important: forget the socket to prevent double-close
                             std::mem::forget(socket);
                         }
-                        
+
                         #[cfg(not(unix))]
                         {
-                            log::warn!("TCP keep-alive configuration not supported on this platform");
+                            log::warn!(
+                                "TCP keep-alive configuration not supported on this platform"
+                            );
                         }
                     }
                 }
@@ -899,7 +940,7 @@ impl Connection {
             }
             _ => {}
         }
-        
+
         Ok(())
     }
 
@@ -908,10 +949,10 @@ impl Connection {
     pub async fn get_properties(&self) -> ConnectionProperties {
         let inner = self.inner.read().await;
         let mut props = inner.properties.clone();
-        
+
         // Get the transport properties to check direction
         let direction = inner.transport_properties.selection_properties.direction;
-        
+
         // RFC 8.1.11.2: Can Send Data
         // Check against direction Selection Property and Final message state
         let can_send = match inner.state {
@@ -927,7 +968,7 @@ impl Connection {
             ConnectionState::Establishing => false, // Could buffer, but say false for now
             _ => false,
         };
-        
+
         // RFC 8.1.11.3: Can Receive Data
         // Check against direction Selection Property and Final message state
         let can_receive = match inner.state {
@@ -942,19 +983,21 @@ impl Connection {
             }
             _ => false,
         };
-        
+
         // Update the basic read-only properties
         props.update_readonly(inner.state, can_send, can_receive);
-        
+
         // Update MTU-related properties if we have a TCP stream
         if let Some(ref stream) = inner.tcp_stream {
             // RFC 8.1.11.4: Maximum Message Size Before Fragmentation
             // Query actual MSS from socket
             let mss = self.get_tcp_mss(stream).await.unwrap_or(1460); // Default to typical value if query fails
-            
-            props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
-                ConnectionProperty::SingularTransmissionMsgMaxLen(Some(mss)));
-            
+
+            props.properties.insert(
+                "singularTransmissionMsgMaxLen".to_string(),
+                ConnectionProperty::SingularTransmissionMsgMaxLen(Some(mss)),
+            );
+
             // RFC 8.1.11.5: Maximum Message Size on Send
             // For TCP, there's no inherent limit (streaming protocol)
             // Return 0 if sending is not possible
@@ -963,10 +1006,12 @@ impl Connection {
             } else {
                 Some(0) // Cannot send
             };
-            props.properties.insert("sendMsgMaxLen".to_string(),
-                ConnectionProperty::SendMsgMaxLen(send_msg_max));
-            
-            // RFC 8.1.11.6: Maximum Message Size on Receive  
+            props.properties.insert(
+                "sendMsgMaxLen".to_string(),
+                ConnectionProperty::SendMsgMaxLen(send_msg_max),
+            );
+
+            // RFC 8.1.11.6: Maximum Message Size on Receive
             // For TCP, there's no inherent limit (streaming protocol)
             // Return 0 if receiving is not possible
             let recv_msg_max = if can_receive {
@@ -974,8 +1019,10 @@ impl Connection {
             } else {
                 Some(0) // Cannot receive
             };
-            props.properties.insert("recvMsgMaxLen".to_string(),
-                ConnectionProperty::RecvMsgMaxLen(recv_msg_max));
+            props.properties.insert(
+                "recvMsgMaxLen".to_string(),
+                ConnectionProperty::RecvMsgMaxLen(recv_msg_max),
+            );
         } else {
             // No stream - set appropriate values based on connection state
             if inner.state == ConnectionState::Establishing {
@@ -983,42 +1030,51 @@ impl Connection {
                 // This matches the expectation of test_mss_property_not_set_before_connection
             } else {
                 // For closed connections or other states, add properties with 0 values
-                props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
-                    ConnectionProperty::SingularTransmissionMsgMaxLen(None)); // Not applicable
-                props.properties.insert("sendMsgMaxLen".to_string(),
-                    ConnectionProperty::SendMsgMaxLen(Some(0))); // Cannot send without stream
-                props.properties.insert("recvMsgMaxLen".to_string(),
-                    ConnectionProperty::RecvMsgMaxLen(Some(0))); // Cannot receive without stream
+                props.properties.insert(
+                    "singularTransmissionMsgMaxLen".to_string(),
+                    ConnectionProperty::SingularTransmissionMsgMaxLen(None),
+                ); // Not applicable
+                props.properties.insert(
+                    "sendMsgMaxLen".to_string(),
+                    ConnectionProperty::SendMsgMaxLen(Some(0)),
+                ); // Cannot send without stream
+                props.properties.insert(
+                    "recvMsgMaxLen".to_string(),
+                    ConnectionProperty::RecvMsgMaxLen(Some(0)),
+                ); // Cannot receive without stream
             }
         }
-        
+
         props
     }
-    
+
     /// Get a specific connection property value
     pub async fn get_property(&self, key: &str) -> Option<ConnectionProperty> {
         let props = self.get_properties().await;
         props.get(key).cloned()
     }
-    
+
     /// Get the connection group ID if this connection is part of a group
     pub async fn connection_group_id(&self) -> Option<ConnectionGroupId> {
         let inner = self.inner.read().await;
         inner.connection_group.as_ref().map(|g| g.id)
     }
-    
+
     /// Check if this connection is part of a connection group
     pub async fn is_grouped(&self) -> bool {
         let inner = self.inner.read().await;
         inner.connection_group.is_some()
     }
-    
+
     /// Get the number of connections in this connection's group
     pub async fn group_connection_count(&self) -> Option<u64> {
         let inner = self.inner.read().await;
-        inner.connection_group.as_ref().map(|g| g.connection_count())
+        inner
+            .connection_group
+            .as_ref()
+            .map(|g| g.connection_count())
     }
-    
+
     /// Close all connections in the group
     /// RFC Section 10
     pub async fn close_group(&self) -> Result<()> {
@@ -1027,38 +1083,38 @@ impl Connection {
             let inner = self.inner.read().await;
             inner.connection_group.is_some()
         };
-        
+
         if has_group {
             let inner = self.inner.read().await;
             let group = inner.connection_group.as_ref().unwrap();
             // Get all connections in the group
             let connections = group.get_connections().await;
             drop(inner); // Release lock before closing connections
-            
+
             // Close all connections in parallel
             let mut close_tasks = Vec::new();
             for conn_inner in connections {
                 let task = tokio::spawn(async move {
                     let mut inner = conn_inner.write().await;
-                    
+
                     match inner.state {
                         ConnectionState::Established | ConnectionState::Establishing => {
                             inner.state = ConnectionState::Closing;
-                            
+
                             // Clear any pending batched messages before closing
                             inner.batched_messages.clear();
-                            
+
                             // Perform graceful close on TCP stream
                             if let Some(ref mut stream) = inner.tcp_stream {
                                 let _ = stream.flush().await;
                                 let _ = stream.shutdown().await;
                             }
-                            
+
                             inner.state = ConnectionState::Closed;
                             inner.pending_messages.clear();
                             inner.receive_buffer.clear();
                             inner.tcp_stream = None;
-                            
+
                             // Note: We don't decrement connection count here as it's handled by each connection
                         }
                         _ => {} // Already closing or closed
@@ -1066,12 +1122,12 @@ impl Connection {
                 });
                 close_tasks.push(task);
             }
-            
+
             // Wait for all connections to close
             for task in close_tasks {
                 let _ = task.await;
             }
-            
+
             // Send Closed event for this connection
             let _ = self.event_sender.send(ConnectionEvent::Closed);
             Ok(())
@@ -1080,7 +1136,7 @@ impl Connection {
             self.close().await
         }
     }
-    
+
     /// Abort all connections in the group
     pub async fn abort_group(&self) -> Result<()> {
         // Check if we have a group
@@ -1088,30 +1144,30 @@ impl Connection {
             let inner = self.inner.read().await;
             inner.connection_group.is_some()
         };
-        
+
         if has_group {
             let inner = self.inner.read().await;
             let group = inner.connection_group.as_ref().unwrap();
             // Get all connections in the group
             let connections = group.get_connections().await;
             drop(inner); // Release lock before aborting connections
-            
+
             // Abort all connections in parallel
             let mut abort_tasks = Vec::new();
             for conn_inner in connections {
                 let task = tokio::spawn(async move {
                     let mut inner = conn_inner.write().await;
-                    
+
                     let was_not_closed = inner.state != ConnectionState::Closed;
                     if was_not_closed {
                         // Immediately set state to Closed
                         inner.state = ConnectionState::Closed;
-                        
+
                         // Force close the TCP stream
                         if let Some(stream) = inner.tcp_stream.take() {
                             drop(stream); // This sends TCP RST
                         }
-                        
+
                         // Clear all buffers
                         inner.pending_messages.clear();
                         inner.batched_messages.clear();
@@ -1120,15 +1176,15 @@ impl Connection {
                 });
                 abort_tasks.push(task);
             }
-            
+
             // Wait for all connections to abort
             for task in abort_tasks {
                 let _ = task.await;
             }
-            
+
             // Send ConnectionError event for this connection
             let _ = self.event_sender.send(ConnectionEvent::ConnectionError(
-                "Connection group aborted".to_string()
+                "Connection group aborted".to_string(),
             ));
             Ok(())
         } else {
@@ -1142,109 +1198,123 @@ impl Connection {
     pub(crate) async fn set_state(&self, state: ConnectionState) {
         let mut inner = self.inner.write().await;
         inner.state = state;
-        
+
         if state == ConnectionState::Established {
             let _ = self.event_sender.send(ConnectionEvent::Ready);
         }
     }
-    
+
     // Internal method to set TCP stream (for listener)
     pub(crate) async fn set_tcp_stream(&mut self, stream: TcpStream) {
         let mut inner = self.inner.write().await;
         inner.tcp_stream = Some(stream);
         inner.state = ConnectionState::Established;
         drop(inner);
-        
+
         // Start background reading task
         let _ = self.start_reading_task().await;
-        
+
         let _ = self.event_sender.send(ConnectionEvent::Ready);
     }
-    
+
     /// Emit a SoftError event
     /// RFC Section 8.3.1 - Soft Errors
     pub(crate) async fn emit_soft_error(&self, error_message: String) {
         // Only emit if soft error notifications are requested
         let inner = self.inner.read().await;
-        if inner.transport_properties.selection_properties.soft_error_notify == Preference::Require ||
-           inner.transport_properties.selection_properties.soft_error_notify == Preference::Prefer {
+        if inner
+            .transport_properties
+            .selection_properties
+            .soft_error_notify
+            == Preference::Require
+            || inner
+                .transport_properties
+                .selection_properties
+                .soft_error_notify
+                == Preference::Prefer
+        {
             drop(inner);
-            let _ = self.event_sender.send(ConnectionEvent::SoftError(error_message));
+            let _ = self
+                .event_sender
+                .send(ConnectionEvent::SoftError(error_message));
         }
     }
-    
+
     /// Emit a PathChange event  
     /// RFC Section 8.3.2 - Path Change
     pub(crate) async fn emit_path_change(&self) {
         let _ = self.event_sender.send(ConnectionEvent::PathChange);
     }
-    
+
     /// Get the TCP Maximum Segment Size (MSS) from a TcpStream
     async fn get_tcp_mss(&self, stream: &TcpStream) -> Result<usize> {
         #[cfg(unix)]
         {
             use std::os::unix::io::{AsRawFd, FromRawFd};
-            
+
             // Get the raw file descriptor from the TcpStream
             let fd = stream.as_raw_fd();
-            
+
             // Create a Socket from the raw fd
             // SAFETY: We're borrowing the fd from TcpStream, not taking ownership
             let socket = unsafe { Socket::from_raw_fd(fd) };
-            
+
             // Get the MSS value
             #[cfg(not(target_os = "redox"))]
             let mss_result = socket.mss();
-            
+
             #[cfg(target_os = "redox")]
             let mss_result = Err(std::io::Error::new(
                 std::io::ErrorKind::Unsupported,
-                "TCP MSS query not supported on Redox"
+                "TCP MSS query not supported on Redox",
             ));
-            
+
             // Important: We must forget the socket to prevent it from closing the fd
             // when it goes out of scope (since we don't own the fd)
             std::mem::forget(socket);
-            
+
             match mss_result {
                 Ok(mss) => Ok(mss as usize),
                 Err(e) => {
                     // Log the error but don't fail
                     log::debug!("Failed to get TCP MSS: {}", e);
-                    Err(TransportServicesError::NotSupported(format!("Failed to get TCP MSS: {}", e)))
+                    Err(TransportServicesError::NotSupported(format!(
+                        "Failed to get TCP MSS: {}",
+                        e
+                    )))
                 }
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             // On non-Unix platforms, return a typical default value
             Ok(1460)
         }
     }
-    
+
     /// Start a background task to continuously read from the connection
     /// This enables passive message reception via events
     async fn start_reading_task(&self) -> Result<()> {
         // Clone necessary handles for the background task
         let inner_clone = Arc::clone(&self.inner);
         let event_sender = self.event_sender.clone();
-        
+
         // Spawn the background reading task
         tokio::spawn(async move {
             let mut buffer = vec![0u8; 8192];
-            
+
             loop {
                 // Check if connection is still active
                 let should_continue = {
                     let inner = inner_clone.read().await;
                     matches!(inner.state, ConnectionState::Established)
                 };
-                
+
                 if !should_continue {
                     break;
                 }
-                
+
                 // Try to read data from the stream
                 let read_result = {
                     let inner = inner_clone.read().await;
@@ -1262,7 +1332,7 @@ impl Connection {
                         break; // No stream available
                     }
                 };
-                
+
                 match read_result {
                     Some(Ok(0)) => {
                         // Connection closed by peer
@@ -1275,7 +1345,7 @@ impl Connection {
                         // Add data to receive buffer and try to parse messages
                         let mut inner = inner_clone.write().await;
                         inner.receive_buffer.extend_from_slice(&buffer[..n]);
-                        
+
                         // Try to parse complete messages from the buffer
                         loop {
                             let message_result = if !inner.framers.is_empty() {
@@ -1283,12 +1353,17 @@ impl Connection {
                                 if inner.receive_buffer.len() >= 4 {
                                     let len_bytes = &inner.receive_buffer[0..4];
                                     let expected_len = u32::from_be_bytes([
-                                        len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]
-                                    ]) as usize;
-                                    
+                                        len_bytes[0],
+                                        len_bytes[1],
+                                        len_bytes[2],
+                                        len_bytes[3],
+                                    ])
+                                        as usize;
+
                                     if inner.receive_buffer.len() >= 4 + expected_len {
                                         // We have a complete message
-                                        let message_data = inner.receive_buffer[4..4 + expected_len].to_vec();
+                                        let message_data =
+                                            inner.receive_buffer[4..4 + expected_len].to_vec();
                                         inner.receive_buffer.drain(..4 + expected_len);
                                         Some(Message::from_bytes(&message_data))
                                     } else {
@@ -1305,17 +1380,17 @@ impl Connection {
                             } else {
                                 None
                             };
-                            
+
                             if let Some(message) = message_result {
                                 // Create message context
                                 let mut context = MessageContext::new();
                                 context.remote_endpoint = inner.remote_endpoint.clone();
-                                
+
                                 // Check if this is a final message
                                 if message.properties().final_message {
                                     inner.final_message_received = true;
                                 }
-                                
+
                                 // Send Received event
                                 let _ = event_sender.send(ConnectionEvent::Received {
                                     message_data: message.data().to_vec(),
@@ -1331,10 +1406,11 @@ impl Connection {
                         let _ = event_sender.send(ConnectionEvent::ReceiveError {
                             error: error_msg.clone(),
                         });
-                        
+
                         // Check if this is a fatal error
-                        if error_msg.contains("broken pipe") || 
-                           error_msg.contains("connection reset") {
+                        if error_msg.contains("broken pipe")
+                            || error_msg.contains("connection reset")
+                        {
                             let mut inner = inner_clone.write().await;
                             inner.state = ConnectionState::Closed;
                             let _ = event_sender.send(ConnectionEvent::Closed);
@@ -1348,7 +1424,7 @@ impl Connection {
                 }
             }
         });
-        
+
         Ok(())
     }
 }

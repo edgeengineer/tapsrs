@@ -45,10 +45,7 @@ pub enum EndpointIdentifier {
     /// Any-source multicast (ASM) group (for receive operations)
     AnySourceMulticastGroupIP(IpAddr),
     /// Single-source multicast (SSM) group (for receive operations)
-    SingleSourceMulticastGroupIP {
-        group: IpAddr,
-        source: IpAddr,
-    },
+    SingleSourceMulticastGroupIP { group: IpAddr, source: IpAddr },
     /// Hop limit for multicast packets
     HopLimit(u8),
 }
@@ -76,28 +73,29 @@ impl LocalEndpoint {
     pub fn builder() -> LocalEndpointBuilder {
         LocalEndpointBuilder::new()
     }
-    
+
     /// Add an interface identifier
     /// RFC Section 6.1: LocalSpecifier.WithInterface("en0")
     pub fn with_interface(mut self, interface: impl Into<String>) -> Self {
-        self.identifiers.push(EndpointIdentifier::Interface(interface.into()));
+        self.identifiers
+            .push(EndpointIdentifier::Interface(interface.into()));
         self
     }
-    
+
     /// Add a port number
     /// RFC Section 6.1: LocalSpecifier.WithPort(443)
     pub fn with_port(mut self, port: u16) -> Self {
         self.identifiers.push(EndpointIdentifier::Port(port));
         self
     }
-    
+
     /// Add an IP address
     /// RFC Section 6.1: LocalSpecifier.WithIPAddress(192.0.2.21)
     pub fn with_ip_address(mut self, addr: IpAddr) -> Self {
         self.identifiers.push(EndpointIdentifier::IpAddress(addr));
         self
     }
-    
+
     /// Add a STUN server for NAT traversal
     /// RFC Section 6.1: LocalSpecifier.WithStunServer(address, port, credentials)
     pub fn with_stun_server(
@@ -113,21 +111,20 @@ impl LocalEndpoint {
         });
         self
     }
-    
+
     /// Add an any-source multicast group IP address (for receive operations)
     /// RFC Section 6.1.1: LocalSpecifier.JoinGroup(group_ip, [None])
     pub fn with_any_source_multicast_group_ip(mut self, group: IpAddr) -> Self {
-        self.identifiers.push(EndpointIdentifier::AnySourceMulticastGroupIP(group));
+        self.identifiers
+            .push(EndpointIdentifier::AnySourceMulticastGroupIP(group));
         self
     }
-    
+
     /// Add a single-source multicast group IP address (for receive operations)
     /// RFC Section 6.1.1: LocalSpecifier.JoinGroup(group_ip, source_ip)
     pub fn with_single_source_multicast_group_ip(mut self, group: IpAddr, source: IpAddr) -> Self {
-        self.identifiers.push(EndpointIdentifier::SingleSourceMulticastGroupIP {
-            group,
-            source,
-        });
+        self.identifiers
+            .push(EndpointIdentifier::SingleSourceMulticastGroupIP { group, source });
         self
     }
 }
@@ -144,25 +141,25 @@ impl LocalEndpointBuilder {
             endpoint: LocalEndpoint::new(),
         }
     }
-    
+
     /// Add an interface identifier
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.endpoint = self.endpoint.with_interface(interface);
         self
     }
-    
+
     /// Add a port number
     pub fn port(mut self, port: u16) -> Self {
         self.endpoint = self.endpoint.with_port(port);
         self
     }
-    
+
     /// Add an IP address
     pub fn ip_address(mut self, addr: IpAddr) -> Self {
         self.endpoint = self.endpoint.with_ip_address(addr);
         self
     }
-    
+
     /// Add a STUN server
     pub fn stun_server(
         mut self,
@@ -173,19 +170,21 @@ impl LocalEndpointBuilder {
         self.endpoint = self.endpoint.with_stun_server(address, port, credentials);
         self
     }
-    
+
     /// Add an any-source multicast group IP address
     pub fn any_source_multicast_group_ip(mut self, group: IpAddr) -> Self {
         self.endpoint = self.endpoint.with_any_source_multicast_group_ip(group);
         self
     }
-    
+
     /// Add a single-source multicast group IP address
     pub fn single_source_multicast_group_ip(mut self, group: IpAddr, source: IpAddr) -> Self {
-        self.endpoint = self.endpoint.with_single_source_multicast_group_ip(group, source);
+        self.endpoint = self
+            .endpoint
+            .with_single_source_multicast_group_ip(group, source);
         self
     }
-    
+
     /// Build the LocalEndpoint
     pub fn build(self) -> LocalEndpoint {
         self.endpoint
@@ -215,60 +214,65 @@ impl RemoteEndpoint {
     pub fn builder() -> RemoteEndpointBuilder {
         RemoteEndpointBuilder::new()
     }
-    
+
     /// Add a hostname
     /// RFC Section 6.1: RemoteSpecifier.WithHostName("example.com")
     pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
-        self.identifiers.push(EndpointIdentifier::HostName(hostname.into()));
+        self.identifiers
+            .push(EndpointIdentifier::HostName(hostname.into()));
         self
     }
-    
+
     /// Add a port number
     /// RFC Section 6.1: RemoteSpecifier.WithPort(443)
     pub fn with_port(mut self, port: u16) -> Self {
         self.identifiers.push(EndpointIdentifier::Port(port));
         self
     }
-    
+
     /// Add a service name
     /// RFC Section 6.1: RemoteSpecifier.WithService("https")
     pub fn with_service(mut self, service: impl Into<String>) -> Self {
-        self.identifiers.push(EndpointIdentifier::Service(service.into()));
+        self.identifiers
+            .push(EndpointIdentifier::Service(service.into()));
         self
     }
-    
+
     /// Add an IP address
     /// RFC Section 6.1: RemoteSpecifier.WithIPAddress(192.0.2.21)
     pub fn with_ip_address(mut self, addr: IpAddr) -> Self {
         self.identifiers.push(EndpointIdentifier::IpAddress(addr));
         self
     }
-    
+
     /// Add an interface (for link-local addresses)
     /// RFC Section 6.1: Used to qualify link-local addresses
     pub fn with_interface(mut self, interface: impl Into<String>) -> Self {
-        self.identifiers.push(EndpointIdentifier::Interface(interface.into()));
+        self.identifiers
+            .push(EndpointIdentifier::Interface(interface.into()));
         self
     }
-    
+
     /// Set the protocol for protocol-specific endpoints
     /// RFC Section 6.1.3: RemoteSpecifier.WithProtocol(QUIC)
     pub fn with_protocol(mut self, protocol: Protocol) -> Self {
         self.protocol = Some(protocol);
         self
     }
-    
+
     /// Add a multicast group IP address (for send operations)
     /// RFC Section 6.1.1: RemoteSpecifier.WithIPAddress(multicast_group_ip)
     pub fn with_multicast_group_ip(mut self, group: IpAddr) -> Self {
-        self.identifiers.push(EndpointIdentifier::MulticastGroupIP(group));
+        self.identifiers
+            .push(EndpointIdentifier::MulticastGroupIP(group));
         self
     }
-    
+
     /// Set the hop limit for multicast packets
     /// RFC Section 6.1.1: HopLimit configuration for multicast
     pub fn with_hop_limit(mut self, hop_limit: u8) -> Self {
-        self.identifiers.push(EndpointIdentifier::HopLimit(hop_limit));
+        self.identifiers
+            .push(EndpointIdentifier::HopLimit(hop_limit));
         self
     }
 }
@@ -285,61 +289,63 @@ impl RemoteEndpointBuilder {
             endpoint: RemoteEndpoint::new(),
         }
     }
-    
+
     /// Add a hostname
     pub fn hostname(mut self, hostname: impl Into<String>) -> Self {
         self.endpoint = self.endpoint.with_hostname(hostname);
         self
     }
-    
+
     /// Add a port number
     pub fn port(mut self, port: u16) -> Self {
         self.endpoint = self.endpoint.with_port(port);
         self
     }
-    
+
     /// Add a service name
     pub fn service(mut self, service: impl Into<String>) -> Self {
         self.endpoint = self.endpoint.with_service(service);
         self
     }
-    
+
     /// Add an IP address
     pub fn ip_address(mut self, addr: IpAddr) -> Self {
         self.endpoint = self.endpoint.with_ip_address(addr);
         self
     }
-    
+
     /// Add a socket address
     pub fn socket_address(mut self, addr: SocketAddr) -> Self {
-        self.endpoint.identifiers.push(EndpointIdentifier::SocketAddress(addr));
+        self.endpoint
+            .identifiers
+            .push(EndpointIdentifier::SocketAddress(addr));
         self
     }
-    
+
     /// Add an interface
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.endpoint = self.endpoint.with_interface(interface);
         self
     }
-    
+
     /// Set the protocol
     pub fn protocol(mut self, protocol: Protocol) -> Self {
         self.endpoint = self.endpoint.with_protocol(protocol);
         self
     }
-    
+
     /// Add a multicast group IP address
     pub fn multicast_group_ip(mut self, group: IpAddr) -> Self {
         self.endpoint = self.endpoint.with_multicast_group_ip(group);
         self
     }
-    
+
     /// Set the hop limit for multicast packets
     pub fn hop_limit(mut self, hop_limit: u8) -> Self {
         self.endpoint = self.endpoint.with_hop_limit(hop_limit);
         self
     }
-    
+
     /// Build the RemoteEndpoint
     pub fn build(self) -> RemoteEndpoint {
         self.endpoint
@@ -377,7 +383,7 @@ impl TransportProperties {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Set a property value
     /// RFC Section 6.2: TransportProperties.Set(property, value)
     pub fn set(&mut self, property: TransportProperty, value: PropertyValue) -> &mut Self {
@@ -502,7 +508,7 @@ impl TransportProperties {
         }
         self
     }
-    
+
     /// Create a new builder for TransportProperties
     pub fn builder() -> TransportPropertiesBuilder {
         TransportPropertiesBuilder::new()
@@ -631,43 +637,43 @@ pub struct MessageProperties {
     /// Message lifetime before expiry
     /// RFC Section 9.1.3.1
     pub lifetime: Option<Duration>,
-    
+
     /// Message priority (higher values = higher priority)
     /// RFC Section 9.1.3.2
     pub priority: Option<i32>,
-    
+
     /// Whether ordering should be preserved for this message
     /// RFC Section 9.1.3.3
     pub ordered: Option<bool>,
-    
+
     /// Whether this message is safely replayable (idempotent)
     /// RFC Section 9.1.3.4
     pub safely_replayable: bool,
-    
+
     /// Whether this is the final message on the connection
     /// RFC Section 9.1.3.5
     pub final_message: bool,
-    
+
     /// Checksum coverage length in bytes
     /// RFC Section 9.1.3.6
     pub checksum_length: Option<usize>,
-    
+
     /// Whether reliable delivery is required for this message
     /// RFC Section 9.1.3.7
     pub reliable: Option<bool>,
-    
+
     /// Capacity profile override for this message
     /// RFC Section 9.1.3.8
     pub capacity_profile: Option<MessageCapacityProfile>,
-    
+
     /// Disable network-layer fragmentation
     /// RFC Section 9.1.3.9
     pub no_fragmentation: bool,
-    
+
     /// Disable transport-layer segmentation
     /// RFC Section 9.1.3.10
     pub no_segmentation: bool,
-    
+
     // Legacy fields (keeping for compatibility)
     #[deprecated(note = "Use safely_replayable instead")]
     pub idempotent: bool,
@@ -734,7 +740,7 @@ impl SecurityParameters {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create disabled security parameters (no security)
     /// RFC Section 6.3: NewDisabledSecurityParameters()
     pub fn new_disabled() -> Self {
@@ -743,7 +749,7 @@ impl SecurityParameters {
             ..Default::default()
         }
     }
-    
+
     /// Create opportunistic security parameters (try security, fall back if unavailable)
     /// RFC Section 6.3: NewOpportunisticSecurityParameters()
     pub fn new_opportunistic() -> Self {
@@ -752,10 +758,14 @@ impl SecurityParameters {
             ..Default::default()
         }
     }
-    
+
     /// Set a security parameter value
     /// RFC Section 6.3: SecurityParameters.Set(property, value)
-    pub fn set(&mut self, parameter: SecurityParameter, value: SecurityParameterValue) -> &mut Self {
+    pub fn set(
+        &mut self,
+        parameter: SecurityParameter,
+        value: SecurityParameterValue,
+    ) -> &mut Self {
         match parameter {
             SecurityParameter::Disabled => {
                 if let SecurityParameterValue::Bool(val) = value {
@@ -825,7 +835,7 @@ impl SecurityParameters {
         }
         self
     }
-    
+
     /// Set trust verification callback
     #[cfg(not(feature = "ffi"))]
     pub fn set_trust_verification_callback<F>(&mut self, callback: F) -> &mut Self
@@ -835,7 +845,7 @@ impl SecurityParameters {
         self.trust_verification_callback = Some(Box::new(callback));
         self
     }
-    
+
     /// Set identity challenge callback  
     #[cfg(not(feature = "ffi"))]
     pub fn set_identity_challenge_callback<F>(&mut self, callback: F) -> &mut Self
@@ -855,13 +865,19 @@ impl std::fmt::Debug for SecurityParameters {
             .field("allowed_protocols", &self.allowed_protocols)
             .field("server_certificate", &self.server_certificate.len())
             .field("client_certificate", &self.client_certificate.len())
-            .field("pinned_server_certificate", &self.pinned_server_certificate.len())
+            .field(
+                "pinned_server_certificate",
+                &self.pinned_server_certificate.len(),
+            )
             .field("alpn", &self.alpn)
             .field("supported_groups", &self.supported_groups)
             .field("ciphersuites", &self.ciphersuites)
             .field("signature_algorithms", &self.signature_algorithms)
             .field("max_cached_sessions", &self.max_cached_sessions)
-            .field("cached_session_lifetime_seconds", &self.cached_session_lifetime_seconds)
+            .field(
+                "cached_session_lifetime_seconds",
+                &self.cached_session_lifetime_seconds,
+            )
             .field("pre_shared_key", &self.pre_shared_key.is_some())
             .finish()
     }
@@ -995,22 +1011,38 @@ pub enum ConnectionEvent {
     Closed,
     /// Message was successfully sent
     /// RFC Section 9.2.2.1
-    Sent { message_id: Option<u64> },
+    Sent {
+        message_id: Option<u64>,
+    },
     /// Message expired before it could be sent  
     /// RFC Section 9.2.2.2
-    Expired { message_id: Option<u64> },
+    Expired {
+        message_id: Option<u64>,
+    },
     /// Error occurred while sending
     /// RFC Section 9.2.2.3
-    SendError { message_id: Option<u64>, error: String },
+    SendError {
+        message_id: Option<u64>,
+        error: String,
+    },
     /// Complete message was received
     /// RFC Section 9.3.2.1
-    Received { message_data: Vec<u8>, message_context: crate::MessageContext },
+    Received {
+        message_data: Vec<u8>,
+        message_context: crate::MessageContext,
+    },
     /// Partial message was received
     /// RFC Section 9.3.2.2
-    ReceivedPartial { message_data: Vec<u8>, message_context: crate::MessageContext, end_of_message: bool },
+    ReceivedPartial {
+        message_data: Vec<u8>,
+        message_context: crate::MessageContext,
+        end_of_message: bool,
+    },
     /// Error occurred while receiving
     /// RFC Section 9.3.2.3
-    ReceiveError { error: String },
+    ReceiveError {
+        error: String,
+    },
 }
 
 /// Event types that can be emitted during rendezvous
@@ -1034,133 +1066,194 @@ impl TransportPropertiesBuilder {
             properties: TransportProperties::new(),
         }
     }
-    
+
     /// Set reliability preference
     pub fn reliability(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::Reliability, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::Reliability,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set preserve message boundaries preference
     pub fn preserve_msg_boundaries(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::PreserveMsgBoundaries, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::PreserveMsgBoundaries,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set per-message reliability preference
     pub fn per_msg_reliability(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::PerMsgReliability, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::PerMsgReliability,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set preserve order preference
     pub fn preserve_order(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::PreserveOrder, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::PreserveOrder,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set zero RTT message preference
     pub fn zero_rtt_msg(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::ZeroRttMsg, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::ZeroRttMsg,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set multistreaming preference
     pub fn multistreaming(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::Multistreaming, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::Multistreaming,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set full checksum send preference
     pub fn full_checksum_send(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::FullChecksumSend, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::FullChecksumSend,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set full checksum receive preference
     pub fn full_checksum_recv(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::FullChecksumRecv, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::FullChecksumRecv,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set congestion control preference
     pub fn congestion_control(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::CongestionControl, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::CongestionControl,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set keep alive preference
     pub fn keep_alive(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::KeepAlive, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::KeepAlive,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Add interface preference
     pub fn interface(mut self, iface: impl Into<String>, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::Interface, PropertyValue::StringPreference(iface.into(), pref));
+        self.properties.set(
+            TransportProperty::Interface,
+            PropertyValue::StringPreference(iface.into(), pref),
+        );
         self
     }
-    
+
     /// Add PVD preference
     pub fn pvd(mut self, pvd: impl Into<String>, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::Pvd, PropertyValue::StringPreference(pvd.into(), pref));
+        self.properties.set(
+            TransportProperty::Pvd,
+            PropertyValue::StringPreference(pvd.into(), pref),
+        );
         self
     }
-    
+
     /// Set use temporary local address preference
     pub fn use_temporary_local_address(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::UseTemporaryLocalAddress, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::UseTemporaryLocalAddress,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set multipath configuration
     pub fn multipath(mut self, config: MultipathConfig) -> Self {
-        self.properties.set(TransportProperty::Multipath, PropertyValue::Multipath(config));
+        self.properties.set(
+            TransportProperty::Multipath,
+            PropertyValue::Multipath(config),
+        );
         self
     }
-    
+
     /// Set advertises alternate address
     pub fn advertises_altaddr(mut self, val: bool) -> Self {
-        self.properties.set(TransportProperty::AdvertisesAltaddr, PropertyValue::Bool(val));
+        self.properties.set(
+            TransportProperty::AdvertisesAltaddr,
+            PropertyValue::Bool(val),
+        );
         self
     }
-    
+
     /// Set communication direction
     pub fn direction(mut self, dir: CommunicationDirection) -> Self {
-        self.properties.set(TransportProperty::Direction, PropertyValue::Direction(dir));
+        self.properties
+            .set(TransportProperty::Direction, PropertyValue::Direction(dir));
         self
     }
-    
+
     /// Set soft error notify preference
     pub fn soft_error_notify(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::SoftErrorNotify, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::SoftErrorNotify,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set active read before send preference
     pub fn active_read_before_send(mut self, pref: Preference) -> Self {
-        self.properties.set(TransportProperty::ActiveReadBeforeSend, PropertyValue::Preference(pref));
+        self.properties.set(
+            TransportProperty::ActiveReadBeforeSend,
+            PropertyValue::Preference(pref),
+        );
         self
     }
-    
+
     /// Set connection timeout
     pub fn connection_timeout(mut self, duration: Duration) -> Self {
-        self.properties.set(TransportProperty::ConnectionTimeout, PropertyValue::Duration(duration));
+        self.properties.set(
+            TransportProperty::ConnectionTimeout,
+            PropertyValue::Duration(duration),
+        );
         self
     }
-    
+
     /// Set keep alive timeout
     pub fn keep_alive_timeout(mut self, duration: Duration) -> Self {
-        self.properties.set(TransportProperty::KeepAliveTimeout, PropertyValue::Duration(duration));
+        self.properties.set(
+            TransportProperty::KeepAliveTimeout,
+            PropertyValue::Duration(duration),
+        );
         self
     }
-    
+
     /// Set connection priority
     pub fn connection_priority(mut self, priority: i32) -> Self {
-        self.properties.set(TransportProperty::ConnectionPriority, PropertyValue::Integer(priority));
+        self.properties.set(
+            TransportProperty::ConnectionPriority,
+            PropertyValue::Integer(priority),
+        );
         self
     }
-    
+
     /// Build the TransportProperties
     pub fn build(self) -> TransportProperties {
         self.properties

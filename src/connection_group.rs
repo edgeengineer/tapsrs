@@ -1,10 +1,10 @@
 //! Connection Groups for Transport Services
 //! Based on RFC 9622 Section 7.4 (Connection Groups)
 
-use crate::{TransportProperties, LocalEndpoint, RemoteEndpoint};
-use std::sync::{Arc, Weak};
+use crate::{LocalEndpoint, RemoteEndpoint, TransportProperties};
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::{RwLock, Mutex};
+use std::sync::{Arc, Weak};
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 /// Unique identifier for a connection group
@@ -65,37 +65,42 @@ impl ConnectionGroup {
             connections: Arc::new(Mutex::new(Vec::new())),
         }
     }
-    
+
     /// Increment the connection count
     pub fn add_connection(&self) {
         self.connection_count.fetch_add(1, Ordering::Relaxed);
     }
-    
+
     /// Decrement the connection count
     pub fn remove_connection(&self) {
         self.connection_count.fetch_sub(1, Ordering::Relaxed);
     }
-    
+
     /// Get the current number of connections in the group
     pub fn connection_count(&self) -> u64 {
         self.connection_count.load(Ordering::Relaxed)
     }
-    
+
     /// Check if this group has any active connections
     pub fn has_connections(&self) -> bool {
         self.connection_count() > 0
     }
-    
+
     /// Register a connection with this group
-    pub(crate) async fn register_connection(&self, conn_inner: Weak<RwLock<crate::connection::ConnectionInner>>) {
+    pub(crate) async fn register_connection(
+        &self,
+        conn_inner: Weak<RwLock<crate::connection::ConnectionInner>>,
+    ) {
         let mut connections = self.connections.lock().await;
         connections.push(conn_inner);
         // Clean up any dead weak references while we have the lock
         connections.retain(|weak| weak.strong_count() > 0);
     }
-    
+
     /// Get all active connections in this group
-    pub(crate) async fn get_connections(&self) -> Vec<Arc<RwLock<crate::connection::ConnectionInner>>> {
+    pub(crate) async fn get_connections(
+        &self,
+    ) -> Vec<Arc<RwLock<crate::connection::ConnectionInner>>> {
         let mut connections = self.connections.lock().await;
         // Clean up dead references and collect strong references
         let mut active = Vec::new();

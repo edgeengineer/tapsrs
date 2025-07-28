@@ -1,7 +1,10 @@
 //! FFI bindings for SecurityParameters
 
 use super::*;
-use crate::{SecurityParameters, SecurityParameter, SecurityParameterValue, SecurityProtocol, Certificate, CertificateChain, PreSharedKey};
+use crate::{
+    Certificate, CertificateChain, PreSharedKey, SecurityParameter, SecurityParameterValue,
+    SecurityParameters, SecurityProtocol,
+};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::slice;
@@ -44,21 +47,25 @@ pub extern "C" fn transport_services_new_security_parameters() -> *mut Transport
 
 /// Create disabled security parameters
 #[no_mangle]
-pub extern "C" fn transport_services_new_disabled_security_parameters() -> *mut TransportServicesHandle {
+pub extern "C" fn transport_services_new_disabled_security_parameters(
+) -> *mut TransportServicesHandle {
     let params = Box::new(SecurityParameters::new_disabled());
     to_handle(params)
 }
 
 /// Create opportunistic security parameters
 #[no_mangle]
-pub extern "C" fn transport_services_new_opportunistic_security_parameters() -> *mut TransportServicesHandle {
+pub extern "C" fn transport_services_new_opportunistic_security_parameters(
+) -> *mut TransportServicesHandle {
     let params = Box::new(SecurityParameters::new_opportunistic());
     to_handle(params)
 }
 
 /// Free a SecurityParameters object
 #[no_mangle]
-pub unsafe extern "C" fn transport_services_free_security_parameters(handle: *mut TransportServicesHandle) {
+pub unsafe extern "C" fn transport_services_free_security_parameters(
+    handle: *mut TransportServicesHandle,
+) {
     if !handle.is_null() {
         let _ = from_handle::<SecurityParameters>(handle);
     }
@@ -74,10 +81,10 @@ pub unsafe extern "C" fn transport_services_set_allowed_protocols(
     if handle.is_null() || protocols.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let protocols_slice = slice::from_raw_parts(protocols, count);
-    
+
     let mut allowed_protocols = Vec::new();
     for &proto in protocols_slice {
         let protocol = match proto {
@@ -89,8 +96,11 @@ pub unsafe extern "C" fn transport_services_set_allowed_protocols(
         };
         allowed_protocols.push(protocol);
     }
-    
-    params.set(SecurityParameter::AllowedProtocols, SecurityParameterValue::Protocols(allowed_protocols));
+
+    params.set(
+        SecurityParameter::AllowedProtocols,
+        SecurityParameterValue::Protocols(allowed_protocols),
+    );
     0
 }
 
@@ -104,10 +114,10 @@ pub unsafe extern "C" fn transport_services_set_alpn(
     if handle.is_null() || protocols.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let protocols_slice = slice::from_raw_parts(protocols, count);
-    
+
     let mut alpn_protocols = Vec::new();
     for &proto_ptr in protocols_slice {
         if !proto_ptr.is_null() {
@@ -117,8 +127,11 @@ pub unsafe extern "C" fn transport_services_set_alpn(
             }
         }
     }
-    
-    params.set(SecurityParameter::Alpn, SecurityParameterValue::Strings(alpn_protocols));
+
+    params.set(
+        SecurityParameter::Alpn,
+        SecurityParameterValue::Strings(alpn_protocols),
+    );
     0
 }
 
@@ -132,10 +145,10 @@ pub unsafe extern "C" fn transport_services_set_ciphersuites(
     if handle.is_null() || ciphersuites.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let ciphersuites_slice = slice::from_raw_parts(ciphersuites, count);
-    
+
     let mut suite_list = Vec::new();
     for &suite_ptr in ciphersuites_slice {
         if !suite_ptr.is_null() {
@@ -145,8 +158,11 @@ pub unsafe extern "C" fn transport_services_set_ciphersuites(
             }
         }
     }
-    
-    params.set(SecurityParameter::Ciphersuites, SecurityParameterValue::Strings(suite_list));
+
+    params.set(
+        SecurityParameter::Ciphersuites,
+        SecurityParameterValue::Strings(suite_list),
+    );
     0
 }
 
@@ -160,15 +176,18 @@ pub unsafe extern "C" fn transport_services_set_server_certificate(
     if handle.is_null() || cert_data.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let cert_slice = slice::from_raw_parts(cert_data, cert_len);
-    
+
     let cert = Certificate {
         data: cert_slice.to_vec(),
     };
-    
-    params.set(SecurityParameter::ServerCertificate, SecurityParameterValue::Certificates(vec![cert]));
+
+    params.set(
+        SecurityParameter::ServerCertificate,
+        SecurityParameterValue::Certificates(vec![cert]),
+    );
     0
 }
 
@@ -182,15 +201,18 @@ pub unsafe extern "C" fn transport_services_set_client_certificate(
     if handle.is_null() || cert_data.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let cert_slice = slice::from_raw_parts(cert_data, cert_len);
-    
+
     let cert = Certificate {
         data: cert_slice.to_vec(),
     };
-    
-    params.set(SecurityParameter::ClientCertificate, SecurityParameterValue::Certificates(vec![cert]));
+
+    params.set(
+        SecurityParameter::ClientCertificate,
+        SecurityParameterValue::Certificates(vec![cert]),
+    );
     0
 }
 
@@ -205,21 +227,24 @@ pub unsafe extern "C" fn transport_services_set_pre_shared_key(
     if handle.is_null() || key_data.is_null() || identity.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
     let key_slice = slice::from_raw_parts(key_data, key_len);
-    
+
     let identity_str = match CStr::from_ptr(identity).to_str() {
         Ok(s) => s.to_string(),
         Err(_) => return -1,
     };
-    
+
     let psk = PreSharedKey {
         key: key_slice.to_vec(),
         identity: identity_str,
     };
-    
-    params.set(SecurityParameter::PreSharedKey, SecurityParameterValue::Psk(psk));
+
+    params.set(
+        SecurityParameter::PreSharedKey,
+        SecurityParameterValue::Psk(psk),
+    );
     0
 }
 
@@ -232,9 +257,12 @@ pub unsafe extern "C" fn transport_services_set_max_cached_sessions(
     if handle.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
-    params.set(SecurityParameter::MaxCachedSessions, SecurityParameterValue::Size(max_sessions));
+    params.set(
+        SecurityParameter::MaxCachedSessions,
+        SecurityParameterValue::Size(max_sessions),
+    );
     0
 }
 
@@ -247,9 +275,12 @@ pub unsafe extern "C" fn transport_services_set_cached_session_lifetime(
     if handle.is_null() {
         return -1;
     }
-    
+
     let params = handle_mut::<SecurityParameters>(handle);
-    params.set(SecurityParameter::CachedSessionLifetimeSeconds, SecurityParameterValue::U64(lifetime_seconds));
+    params.set(
+        SecurityParameter::CachedSessionLifetimeSeconds,
+        SecurityParameterValue::U64(lifetime_seconds),
+    );
     0
 }
 

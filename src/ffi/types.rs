@@ -87,9 +87,15 @@ pub enum TransportServicesCommunicationDirection {
 impl From<crate::CommunicationDirection> for TransportServicesCommunicationDirection {
     fn from(dir: crate::CommunicationDirection) -> Self {
         match dir {
-            crate::CommunicationDirection::Bidirectional => TransportServicesCommunicationDirection::Bidirectional,
-            crate::CommunicationDirection::UnidirectionalSend => TransportServicesCommunicationDirection::UnidirectionalSend,
-            crate::CommunicationDirection::UnidirectionalReceive => TransportServicesCommunicationDirection::UnidirectionalReceive,
+            crate::CommunicationDirection::Bidirectional => {
+                TransportServicesCommunicationDirection::Bidirectional
+            }
+            crate::CommunicationDirection::UnidirectionalSend => {
+                TransportServicesCommunicationDirection::UnidirectionalSend
+            }
+            crate::CommunicationDirection::UnidirectionalReceive => {
+                TransportServicesCommunicationDirection::UnidirectionalReceive
+            }
         }
     }
 }
@@ -97,9 +103,15 @@ impl From<crate::CommunicationDirection> for TransportServicesCommunicationDirec
 impl From<TransportServicesCommunicationDirection> for crate::CommunicationDirection {
     fn from(dir: TransportServicesCommunicationDirection) -> Self {
         match dir {
-            TransportServicesCommunicationDirection::Bidirectional => crate::CommunicationDirection::Bidirectional,
-            TransportServicesCommunicationDirection::UnidirectionalSend => crate::CommunicationDirection::UnidirectionalSend,
-            TransportServicesCommunicationDirection::UnidirectionalReceive => crate::CommunicationDirection::UnidirectionalReceive,
+            TransportServicesCommunicationDirection::Bidirectional => {
+                crate::CommunicationDirection::Bidirectional
+            }
+            TransportServicesCommunicationDirection::UnidirectionalSend => {
+                crate::CommunicationDirection::UnidirectionalSend
+            }
+            TransportServicesCommunicationDirection::UnidirectionalReceive => {
+                crate::CommunicationDirection::UnidirectionalReceive
+            }
         }
     }
 }
@@ -192,15 +204,25 @@ pub enum TransportServicesError {
 impl From<crate::TransportServicesError> for TransportServicesError {
     fn from(err: crate::TransportServicesError) -> Self {
         match err {
-            crate::TransportServicesError::InvalidParameters(_) => TransportServicesError::InvalidParameters,
-            crate::TransportServicesError::EstablishmentFailed(_) => TransportServicesError::EstablishmentFailed,
-            crate::TransportServicesError::ConnectionFailed(_) => TransportServicesError::ConnectionFailed,
+            crate::TransportServicesError::InvalidParameters(_) => {
+                TransportServicesError::InvalidParameters
+            }
+            crate::TransportServicesError::EstablishmentFailed(_) => {
+                TransportServicesError::EstablishmentFailed
+            }
+            crate::TransportServicesError::ConnectionFailed(_) => {
+                TransportServicesError::ConnectionFailed
+            }
             crate::TransportServicesError::SendFailed(_) => TransportServicesError::SendFailed,
-            crate::TransportServicesError::ReceiveFailed(_) => TransportServicesError::ReceiveFailed,
+            crate::TransportServicesError::ReceiveFailed(_) => {
+                TransportServicesError::ReceiveFailed
+            }
             crate::TransportServicesError::NotSupported(_) => TransportServicesError::NotSupported,
             crate::TransportServicesError::Timeout => TransportServicesError::Timeout,
             crate::TransportServicesError::InvalidState(_) => TransportServicesError::InvalidState,
-            crate::TransportServicesError::SecurityError(_) => TransportServicesError::SecurityError,
+            crate::TransportServicesError::SecurityError(_) => {
+                TransportServicesError::SecurityError
+            }
             crate::TransportServicesError::Io(_) => TransportServicesError::IoError,
             _ => TransportServicesError::Unknown,
         }
@@ -208,6 +230,9 @@ impl From<crate::TransportServicesError> for TransportServicesError {
 }
 
 /// Callback function types
-pub type TransportServicesConnectionCallback = extern "C" fn(connection: *mut super::TransportServicesHandle, user_data: *mut c_void);
-pub type TransportServicesErrorCallback = extern "C" fn(error: TransportServicesError, message: *const c_char, user_data: *mut c_void);
-pub type TransportServicesMessageCallback = extern "C" fn(message: *const TransportServicesMessage, user_data: *mut c_void);
+pub type TransportServicesConnectionCallback =
+    extern "C" fn(connection: *mut super::TransportServicesHandle, user_data: *mut c_void);
+pub type TransportServicesErrorCallback =
+    extern "C" fn(error: TransportServicesError, message: *const c_char, user_data: *mut c_void);
+pub type TransportServicesMessageCallback =
+    extern "C" fn(message: *const TransportServicesMessage, user_data: *mut c_void);

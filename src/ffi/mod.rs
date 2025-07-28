@@ -1,14 +1,14 @@
 //! Foreign Function Interface (FFI) for Transport Services
 //! Provides C-compatible bindings for cross-platform interoperability
 
-pub mod types;
-pub mod preconnection;
 pub mod connection;
+pub mod error;
 pub mod listener;
 pub mod message;
-pub mod error;
-pub mod transport_properties;
+pub mod preconnection;
 pub mod security_parameters;
+pub mod transport_properties;
+pub mod types;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};

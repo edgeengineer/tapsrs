@@ -1,9 +1,9 @@
 //! FFI bindings for Connection
 
 use super::*;
-use crate::{Connection, Message, ConnectionEvent};
-use std::slice;
+use crate::{Connection, ConnectionEvent, Message};
 use std::ffi::CString;
+use std::slice;
 
 /// Get the state of a connection
 #[no_mangle]
@@ -15,11 +15,11 @@ pub unsafe extern "C" fn transport_services_connection_get_state(
     }
 
     let conn = handle_ref::<Connection>(handle);
-    
+
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     let state = rt.block_on(conn.state());
-    
+
     state.into()
 }
 
@@ -37,15 +37,15 @@ pub unsafe extern "C" fn transport_services_connection_send(
 
     let conn = handle_ref::<Connection>(handle);
     let msg = &*message;
-    
+
     // Create message from FFI data
     if msg.data.is_null() || msg.length == 0 {
         return types::TransportServicesError::InvalidParameters;
     }
-    
+
     let data = slice::from_raw_parts(msg.data, msg.length).to_vec();
     let mut rust_msg = Message::new(data);
-    
+
     // Set message properties
     if msg.lifetime_ms > 0 {
         rust_msg = rust_msg.with_lifetime(std::time::Duration::from_millis(msg.lifetime_ms));
@@ -59,27 +59,35 @@ pub unsafe extern "C" fn transport_services_connection_send(
     if msg.final_message {
         rust_msg = rust_msg.final_message();
     }
-    
+
     // Clone for moving into async task
     let conn_clone = conn.clone();
-    
+
     // Spawn async task to handle send
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             match conn_clone.send(rust_msg).await {
                 Ok(()) => {
-                    callback(types::TransportServicesError::Success, std::ptr::null(), user_data);
+                    callback(
+                        types::TransportServicesError::Success,
+                        std::ptr::null(),
+                        user_data,
+                    );
                 }
                 Err(e) => {
                     error::set_last_error(&e);
                     let error_code = types::TransportServicesError::from(e);
-                    callback(error_code, error::transport_services_get_last_error(), user_data);
+                    callback(
+                        error_code,
+                        error::transport_services_get_last_error(),
+                        user_data,
+                    );
                 }
             }
         });
     });
-    
+
     types::TransportServicesError::Success
 }
 
@@ -93,7 +101,7 @@ pub unsafe extern "C" fn transport_services_connection_close(
     }
 
     let conn = handle_ref::<Connection>(handle);
-    
+
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(conn.close()) {
@@ -115,7 +123,7 @@ pub unsafe extern "C" fn transport_services_connection_abort(
     }
 
     let conn = handle_ref::<Connection>(handle);
-    
+
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(conn.abort()) {
@@ -166,9 +174,9 @@ pub unsafe extern "C" fn transport_services_connection_poll_event(
     if handle.is_null() || event_type.is_null() || message_buffer.is_null() {
         return -1;
     }
-    
+
     let conn = handle_ref::<Connection>(handle);
-    
+
     // Try to get the next event without blocking
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(async {
@@ -177,32 +185,39 @@ pub unsafe extern "C" fn transport_services_connection_poll_event(
     }) {
         Ok(Some(event)) => {
             let (evt_type, msg) = match event {
-                ConnectionEvent::Ready => (TransportServicesConnectionEventType::Ready, "Connection established"),
-                ConnectionEvent::EstablishmentError(ref m) => {
-                    (TransportServicesConnectionEventType::EstablishmentError, m.as_str())
-                }
-                ConnectionEvent::ConnectionError(ref m) => {
-                    (TransportServicesConnectionEventType::ConnectionError, m.as_str())
-                }
-                ConnectionEvent::PathChange => {
-                    (TransportServicesConnectionEventType::PathChange, "Path changed")
-                }
+                ConnectionEvent::Ready => (
+                    TransportServicesConnectionEventType::Ready,
+                    "Connection established",
+                ),
+                ConnectionEvent::EstablishmentError(ref m) => (
+                    TransportServicesConnectionEventType::EstablishmentError,
+                    m.as_str(),
+                ),
+                ConnectionEvent::ConnectionError(ref m) => (
+                    TransportServicesConnectionEventType::ConnectionError,
+                    m.as_str(),
+                ),
+                ConnectionEvent::PathChange => (
+                    TransportServicesConnectionEventType::PathChange,
+                    "Path changed",
+                ),
                 ConnectionEvent::SoftError(ref m) => {
                     (TransportServicesConnectionEventType::SoftError, m.as_str())
                 }
-                ConnectionEvent::Closed => {
-                    (TransportServicesConnectionEventType::Closed, "Connection closed")
-                }
+                ConnectionEvent::Closed => (
+                    TransportServicesConnectionEventType::Closed,
+                    "Connection closed",
+                ),
             };
-            
+
             *event_type = evt_type;
-            
+
             // Copy message to buffer
             let msg_bytes = msg.as_bytes();
             let copy_len = std::cmp::min(msg_bytes.len(), message_buffer_size - 1);
             std::ptr::copy_nonoverlapping(msg_bytes.as_ptr(), message_buffer as *mut u8, copy_len);
             *message_buffer.add(copy_len) = 0; // Null terminate
-            
+
             0 // Success
         }
         _ => 1, // No event available

@@ -6,9 +6,9 @@ use std::env;
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    
+
     println!("cargo:rerun-if-changed=build.rs");
-    
+
     // Platform-specific configurations
     match target_os.as_str() {
         "ios" => {
@@ -31,7 +31,7 @@ fn main() {
         }
         _ => {}
     }
-    
+
     // Architecture-specific configurations
     match target_arch.as_str() {
         "aarch64" => {
@@ -42,12 +42,12 @@ fn main() {
         }
         _ => {}
     }
-    
+
     // Generate cbindgen headers if FFI feature is enabled
     #[cfg(feature = "ffi")]
     {
         let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        
+
         cbindgen::Builder::new()
             .with_crate(crate_dir)
             .with_language(cbindgen::Language::C)

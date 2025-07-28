@@ -13,7 +13,7 @@ pub unsafe extern "C" fn transport_services_listener_stop(
     }
 
     let listener = handle_ref::<Listener>(handle);
-    
+
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(listener.stop()) {
@@ -35,7 +35,7 @@ pub unsafe extern "C" fn transport_services_listener_is_active(
     }
 
     let listener = handle_ref::<Listener>(handle);
-    
+
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(listener.is_active())

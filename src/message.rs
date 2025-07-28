@@ -1,9 +1,9 @@
 //! Message implementation for Transport Services
 //! Based on RFC 9622 Section 9.1 (Messages and Framers)
 
-use crate::{MessageProperties, MessageCapacityProfile, LocalEndpoint, RemoteEndpoint};
-use std::time::{Duration, Instant};
+use crate::{LocalEndpoint, MessageCapacityProfile, MessageProperties, RemoteEndpoint};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 /// A Message is the unit of data transfer in TAPS
@@ -11,17 +11,17 @@ use tokio::sync::mpsc;
 pub struct Message {
     /// The actual data payload
     data: Vec<u8>,
-    
+
     /// Properties specific to this message
     properties: MessageProperties,
-    
+
     /// Optional message identifier
     id: Option<u64>,
-    
+
     /// Whether this message completes the application-layer message
     /// RFC Section 9.2.3: Partial Sends
     end_of_message: bool,
-    
+
     /// Optional context for sending
     send_context: Option<SendContext>,
 }
@@ -31,10 +31,10 @@ pub struct Message {
 pub struct SendContext {
     /// Expiry time for the message
     pub expiry: Option<Instant>,
-    
+
     /// Whether to bundle this message with others
     pub bundle: bool,
-    
+
     /// Event notifier for send completion
     pub completion_notifier: Option<Arc<mpsc::UnboundedSender<SendEvent>>>,
 }
@@ -44,12 +44,15 @@ pub struct SendContext {
 pub enum SendEvent {
     /// Message was successfully sent
     Sent { message_id: Option<u64> },
-    
+
     /// Message expired before it could be sent
     Expired { message_id: Option<u64> },
-    
+
     /// An error occurred while sending
-    SendError { message_id: Option<u64>, error: String },
+    SendError {
+        message_id: Option<u64>,
+        error: String,
+    },
 }
 
 impl Message {
@@ -128,7 +131,7 @@ impl Message {
         self.properties.safely_replayable = true;
         self
     }
-    
+
     /// Deprecated: Use safely_replayable() instead
     #[deprecated(note = "Use safely_replayable() instead")]
     pub fn idempotent(mut self) -> Self {
@@ -145,7 +148,7 @@ impl Message {
         self.properties.final_message = true;
         self
     }
-    
+
     /// Set whether this is the final message (allows setting to true or false)
     pub fn with_final(mut self, is_final: bool) -> Self {
         self.properties.final_message = is_final;
@@ -162,82 +165,82 @@ impl Message {
     pub fn id(&self) -> Option<u64> {
         self.id
     }
-    
+
     /// Set whether this message completes the application message
     /// RFC Section 9.2.3: Partial Sends
     pub fn with_end_of_message(mut self, end_of_message: bool) -> Self {
         self.end_of_message = end_of_message;
         self
     }
-    
+
     /// Check if this message completes the application message
     pub fn is_end_of_message(&self) -> bool {
         self.end_of_message
     }
-    
+
     /// Set send context
     pub fn with_send_context(mut self, context: SendContext) -> Self {
         self.send_context = Some(context);
         self
     }
-    
+
     /// Get send context
     pub fn send_context(&self) -> Option<&SendContext> {
         self.send_context.as_ref()
     }
-    
+
     /// Take send context (consumes it)
     pub fn take_send_context(&mut self) -> Option<SendContext> {
         self.send_context.take()
     }
-    
+
     /// Create a partial message (not end of message)
     pub fn partial(data: Vec<u8>) -> Self {
         Self::new(data).with_end_of_message(false)
     }
-    
+
     /// Set whether message ordering should be preserved
     /// RFC Section 9.1.3.3
     pub fn with_ordered(mut self, ordered: bool) -> Self {
         self.properties.ordered = Some(ordered);
         self
     }
-    
+
     /// Set checksum coverage length
     /// RFC Section 9.1.3.6
     pub fn with_checksum_length(mut self, length: usize) -> Self {
         self.properties.checksum_length = Some(length);
         self
     }
-    
+
     /// Set whether reliable delivery is required
     /// RFC Section 9.1.3.7
     pub fn with_reliable(mut self, reliable: bool) -> Self {
         self.properties.reliable = Some(reliable);
         self
     }
-    
+
     /// Set capacity profile for this message
     /// RFC Section 9.1.3.8
     pub fn with_capacity_profile(mut self, profile: MessageCapacityProfile) -> Self {
         self.properties.capacity_profile = Some(profile);
         self
     }
-    
+
     /// Disable network-layer fragmentation
     /// RFC Section 9.1.3.9
     pub fn no_fragmentation(mut self) -> Self {
         self.properties.no_fragmentation = true;
         self
     }
-    
+
     /// Disable transport-layer segmentation
     /// RFC Section 9.1.3.10
     pub fn no_segmentation(mut self) -> Self {
         self.properties.no_segmentation = true;
         self
     }
-    
+
     /// Builder for creating a message with specific properties
     pub fn builder(data: Vec<u8>) -> MessageBuilder {
         MessageBuilder::new(data)
@@ -256,25 +259,25 @@ impl MessageBuilder {
             message: Message::new(data),
         }
     }
-    
+
     /// Set message ID
     pub fn id(mut self, id: u64) -> Self {
         self.message = self.message.with_id(id);
         self
     }
-    
+
     /// Set message lifetime
     pub fn lifetime(mut self, lifetime: Duration) -> Self {
         self.message = self.message.with_lifetime(lifetime);
         self
     }
-    
+
     /// Set message priority
     pub fn priority(mut self, priority: i32) -> Self {
         self.message = self.message.with_priority(priority);
         self
     }
-    
+
     /// Set whether message is safely replayable
     pub fn safely_replayable(mut self, replayable: bool) -> Self {
         if replayable {
@@ -282,7 +285,7 @@ impl MessageBuilder {
         }
         self
     }
-    
+
     /// Set whether this is the final message
     pub fn final_message(mut self, is_final: bool) -> Self {
         if is_final {
@@ -290,55 +293,55 @@ impl MessageBuilder {
         }
         self
     }
-    
+
     /// Set whether message is ordered
     pub fn ordered(mut self, ordered: bool) -> Self {
         self.message = self.message.with_ordered(ordered);
         self
     }
-    
+
     /// Set checksum length
     pub fn checksum_length(mut self, length: usize) -> Self {
         self.message = self.message.with_checksum_length(length);
         self
     }
-    
+
     /// Set whether reliable delivery is required
     pub fn reliable(mut self, reliable: bool) -> Self {
         self.message = self.message.with_reliable(reliable);
         self
     }
-    
+
     /// Set capacity profile
     pub fn capacity_profile(mut self, profile: MessageCapacityProfile) -> Self {
         self.message = self.message.with_capacity_profile(profile);
         self
     }
-    
+
     /// Disable fragmentation
     pub fn no_fragmentation(mut self) -> Self {
         self.message = self.message.no_fragmentation();
         self
     }
-    
+
     /// Disable segmentation
     pub fn no_segmentation(mut self) -> Self {
         self.message = self.message.no_segmentation();
         self
     }
-    
+
     /// Set whether this completes the application message
     pub fn end_of_message(mut self, end: bool) -> Self {
         self.message = self.message.with_end_of_message(end);
         self
     }
-    
+
     /// Set send context
     pub fn send_context(mut self, context: SendContext) -> Self {
         self.message = self.message.with_send_context(context);
         self
     }
-    
+
     /// Build the message
     pub fn build(self) -> Message {
         self.message
@@ -351,22 +354,22 @@ impl MessageBuilder {
 pub struct MessageContext {
     /// When the message was received
     pub received_at: Instant,
-    
+
     /// The local endpoint that received the message
     pub local_endpoint: Option<LocalEndpoint>,
-    
+
     /// The remote endpoint that sent the message
     pub remote_endpoint: Option<RemoteEndpoint>,
-    
+
     /// Whether this was received on the primary path
     pub primary_path: bool,
-    
+
     /// ECN (Explicit Congestion Notification) marking
     pub ecn: Option<EcnMarking>,
-    
+
     /// Whether this message was received as early data (0-RTT)
     pub early_data: bool,
-    
+
     /// Reception timestamp from the network interface
     pub interface_timestamp: Option<Instant>,
 }
@@ -434,10 +437,10 @@ pub enum EcnMarking {
 pub trait MessageFramer: Send + Sync {
     /// Frame a message for sending
     fn frame(&self, message: &Message) -> Vec<u8>;
-    
+
     /// Parse received data into messages
     fn deframe(&mut self, data: &[u8]) -> Vec<Message>;
-    
+
     /// Reset framer state
     fn reset(&mut self);
 }
@@ -449,9 +452,7 @@ pub struct LengthPrefixFramer {
 
 impl LengthPrefixFramer {
     pub fn new() -> Self {
-        Self {
-            buffer: Vec::new(),
-        }
+        Self { buffer: Vec::new() }
     }
 }
 
@@ -462,15 +463,15 @@ impl MessageFramer for LengthPrefixFramer {
         framed.extend_from_slice(message.data());
         framed
     }
-    
+
     fn deframe(&mut self, data: &[u8]) -> Vec<Message> {
         self.buffer.extend_from_slice(data);
         let mut messages = Vec::new();
-        
+
         while self.buffer.len() >= 4 {
             let len_bytes: [u8; 4] = self.buffer[..4].try_into().unwrap();
             let len = u32::from_be_bytes(len_bytes) as usize;
-            
+
             if self.buffer.len() >= 4 + len {
                 let msg_data = self.buffer[4..4 + len].to_vec();
                 messages.push(Message::new(msg_data));
@@ -479,10 +480,10 @@ impl MessageFramer for LengthPrefixFramer {
                 break;
             }
         }
-        
+
         messages
     }
-    
+
     fn reset(&mut self) {
         self.buffer.clear();
     }

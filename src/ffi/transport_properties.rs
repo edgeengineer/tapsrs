@@ -1,7 +1,10 @@
 //! FFI bindings for TransportProperties
 
 use super::*;
-use crate::{TransportProperties, TransportProperty, PropertyValue, Preference, MultipathConfig, CommunicationDirection};
+use crate::{
+    CommunicationDirection, MultipathConfig, Preference, PropertyValue, TransportProperties,
+    TransportProperty,
+};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::time::Duration;
@@ -15,7 +18,9 @@ pub extern "C" fn transport_services_new_transport_properties() -> *mut Transpor
 
 /// Free a TransportProperties object
 #[no_mangle]
-pub unsafe extern "C" fn transport_services_free_transport_properties(handle: *mut TransportServicesHandle) {
+pub unsafe extern "C" fn transport_services_free_transport_properties(
+    handle: *mut TransportServicesHandle,
+) {
     if !handle.is_null() {
         let _ = from_handle::<TransportProperties>(handle);
     }
@@ -31,10 +36,10 @@ pub unsafe extern "C" fn transport_services_set_preference(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let pref: Preference = preference.into();
-    
+
     let prop = match property {
         0 => TransportProperty::Reliability,
         1 => TransportProperty::PreserveMsgBoundaries,
@@ -51,7 +56,7 @@ pub unsafe extern "C" fn transport_services_set_preference(
         12 => TransportProperty::ActiveReadBeforeSend,
         _ => return -1,
     };
-    
+
     properties.set(prop, PropertyValue::Preference(pref));
     0
 }
@@ -65,10 +70,13 @@ pub unsafe extern "C" fn transport_services_set_multipath(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let mp_config: MultipathConfig = config.into();
-    properties.set(TransportProperty::Multipath, PropertyValue::Multipath(mp_config));
+    properties.set(
+        TransportProperty::Multipath,
+        PropertyValue::Multipath(mp_config),
+    );
     0
 }
 
@@ -81,7 +89,7 @@ pub unsafe extern "C" fn transport_services_set_direction(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let dir: CommunicationDirection = direction.into();
     properties.set(TransportProperty::Direction, PropertyValue::Direction(dir));
@@ -97,9 +105,12 @@ pub unsafe extern "C" fn transport_services_set_advertises_altaddr(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
-    properties.set(TransportProperty::AdvertisesAltaddr, PropertyValue::Bool(value));
+    properties.set(
+        TransportProperty::AdvertisesAltaddr,
+        PropertyValue::Bool(value),
+    );
     0
 }
 
@@ -113,15 +124,18 @@ pub unsafe extern "C" fn transport_services_set_interface(
     if handle.is_null() || interface.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let iface = match CStr::from_ptr(interface).to_str() {
         Ok(s) => s.to_string(),
         Err(_) => return -1,
     };
     let pref: Preference = preference.into();
-    
-    properties.set(TransportProperty::Interface, PropertyValue::StringPreference(iface, pref));
+
+    properties.set(
+        TransportProperty::Interface,
+        PropertyValue::StringPreference(iface, pref),
+    );
     0
 }
 
@@ -135,15 +149,18 @@ pub unsafe extern "C" fn transport_services_set_pvd(
     if handle.is_null() || pvd.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let pvd_str = match CStr::from_ptr(pvd).to_str() {
         Ok(s) => s.to_string(),
         Err(_) => return -1,
     };
     let pref: Preference = preference.into();
-    
-    properties.set(TransportProperty::Pvd, PropertyValue::StringPreference(pvd_str, pref));
+
+    properties.set(
+        TransportProperty::Pvd,
+        PropertyValue::StringPreference(pvd_str, pref),
+    );
     0
 }
 
@@ -156,10 +173,13 @@ pub unsafe extern "C" fn transport_services_set_connection_timeout(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let duration = Duration::from_millis(timeout_ms);
-    properties.set(TransportProperty::ConnectionTimeout, PropertyValue::Duration(duration));
+    properties.set(
+        TransportProperty::ConnectionTimeout,
+        PropertyValue::Duration(duration),
+    );
     0
 }
 
@@ -172,10 +192,13 @@ pub unsafe extern "C" fn transport_services_set_keep_alive_timeout(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
     let duration = Duration::from_millis(timeout_ms);
-    properties.set(TransportProperty::KeepAliveTimeout, PropertyValue::Duration(duration));
+    properties.set(
+        TransportProperty::KeepAliveTimeout,
+        PropertyValue::Duration(duration),
+    );
     0
 }
 
@@ -188,9 +211,12 @@ pub unsafe extern "C" fn transport_services_set_connection_priority(
     if handle.is_null() {
         return -1;
     }
-    
+
     let properties = handle_mut::<TransportProperties>(handle);
-    properties.set(TransportProperty::ConnectionPriority, PropertyValue::Integer(priority));
+    properties.set(
+        TransportProperty::ConnectionPriority,
+        PropertyValue::Integer(priority),
+    );
     0
 }
 
