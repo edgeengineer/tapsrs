@@ -251,30 +251,32 @@ async fn test_remote_close_detection() {
             other => panic!("Expected Ready event, got {:?}", other),
         }
         
-        // Try to receive data which should eventually fail when remote closes
-        let conn_clone = conn.clone();
-        let receive_handle = tokio::spawn(async move {
-            // First receive should get the "Hello" message
-            match conn_clone.receive().await {
-                Ok((msg, _)) => {
-                    assert_eq!(msg.data(), b"Hello");
+        // Wait for events from background reader
+        let mut received_hello = false;
+        let mut received_closed = false;
+        
+        let start = std::time::Instant::now();
+        while (!received_hello || !received_closed) && start.elapsed() < Duration::from_secs(3) {
+            match tokio::time::timeout(Duration::from_millis(500), conn.next_event()).await {
+                Ok(Some(ConnectionEvent::Received { message_data, .. })) => {
+                    assert_eq!(message_data, b"Hello");
+                    received_hello = true;
                 }
-                Err(_) => {}
+                Ok(Some(ConnectionEvent::Closed)) => {
+                    received_closed = true;
+                }
+                Ok(Some(_)) => {}, // Ignore other events
+                Ok(None) => break,
+                Err(_) => {}, // Timeout, continue
             }
-            
-            // Second receive should fail when remote closes
-            match conn_clone.receive().await {
-                Ok(_) => false, // Unexpected
-                Err(_) => true,  // Expected error when remote closes
-            }
-        });
+        }
         
         // Wait for server to close
         server_task.await.unwrap();
         
-        // Check if receive detected the close
-        let detected_close = receive_handle.await.unwrap();
-        assert!(detected_close, "Receive should have detected remote close");
+        // Ensure we received the message and detected the close
+        assert!(received_hello, "Should have received Hello message");
+        assert!(received_closed, "Should have detected remote close");
         
         // The connection should eventually realize it's closed
         // (though this may require additional implementation)

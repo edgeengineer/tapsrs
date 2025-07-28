@@ -809,11 +809,25 @@ async fn test_full_send_receive_flow() {
         let event = conn.next_event().await;
         assert!(matches!(event, Some(ConnectionEvent::Sent { .. })));
         
-        // Receive the echo - the framer will parse the length prefix
-        let (recv_msg, context) = conn.receive().await.unwrap();
+        // Wait for Received event from background reader
+        let received_event = tokio::time::timeout(
+            Duration::from_secs(5),
+            async {
+                loop {
+                    match conn.next_event().await {
+                        Some(ConnectionEvent::Received { message_data, message_context }) => {
+                            return Some((message_data, message_context));
+                        }
+                        Some(_) => continue, // Ignore other events
+                        None => return None,
+                    }
+                }
+            }
+        ).await.expect("Timeout waiting for Received event")
+        .expect("Should receive echo response");
         
-        assert_eq!(recv_msg.data(), send_msg.data());
-        assert!(context.remote_endpoint.is_some());
+        assert_eq!(received_event.0, send_msg.data());
+        assert!(received_event.1.remote_endpoint.is_some());
         
         conn.close().await.unwrap();
     };
