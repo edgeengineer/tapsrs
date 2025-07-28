@@ -106,8 +106,8 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 ## Phase 4: Connection Management & Termination (RFC Section 8, Managing Connections & 10, Connection Termination)
 
-- [ ] Implement Connection Property management (**RFC Section 8.1, Generic Connection Properties**):
-    - [ ] `Connection.SetProperty()` and `Connection.GetProperties()` methods.
+- [x] Implement Connection Property management (**RFC Section 8.1, Generic Connection Properties**):
+    - [x] `Connection.SetProperty()` and `Connection.GetProperties()` methods.
     - [ ] Implement settable generic connection properties:
         - [ ] `recvChecksumLen` - Required Minimum Corruption Protection Coverage for Receiving (**8.1.1, Required Minimum Corruption Protection Coverage for Receiving**)
         - [ ] `connPriority` - Connection Priority (**8.1.2, Connection Priority**)

@@ -5,6 +5,7 @@ use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
     TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
     EndpointIdentifier, ConnectionGroup, ConnectionGroupId, FramerStack,
+    ConnectionProperties, ConnectionProperty,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -46,6 +47,8 @@ struct ConnectionInner {
     framers: FramerStack,
     // Receive buffer for incoming data
     receive_buffer: Vec<u8>,
+    // Connection properties
+    properties: ConnectionProperties,
 }
 
 impl Clone for Connection {
@@ -87,6 +90,7 @@ impl Connection {
                 next_message_id: Arc::new(AtomicU64::new(1)),
                 framers: FramerStack::new(), // Will be populated from preconnection async
                 receive_buffer: Vec::new(),
+                properties: ConnectionProperties::new(),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -582,16 +586,75 @@ impl Connection {
         inner.remote_endpoint.clone()
     }
 
-    /// Update connection properties
-    pub async fn set_property(&self, _key: &str, _value: &str) -> Result<()> {
-        // TODO: Implement property setting based on RFC Section 8.1
+    /// Set a connection property
+    /// RFC Section 8: Connection.SetProperty(property, value)
+    pub async fn set_property(&self, key: &str, value: ConnectionProperty) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        
+        // For properties in a connection group, update all connections
+        if let Some(ref _group) = inner.connection_group {
+            // connPriority is not shared across the group
+            if key != "connPriority" {
+                // TODO: Implement group-wide property updates
+                // For now, just update this connection
+            }
+        }
+        
+        inner.properties.set(key, value)?;
+        
+        // Apply property changes that need immediate action
+        match key {
+            "connTimeout" => {
+                // TODO: Apply timeout to underlying TCP stream
+            }
+            "keepAliveTimeout" => {
+                // TODO: Configure keep-alive on TCP stream
+            }
+            _ => {}
+        }
+        
         Ok(())
     }
 
-    /// Get connection properties
-    pub async fn get_property(&self, _key: &str) -> Result<Option<String>> {
-        // TODO: Implement property getting
-        Ok(None)
+    /// Get all connection properties
+    /// RFC Section 8: ConnectionProperties := Connection.GetProperties()
+    pub async fn get_properties(&self) -> ConnectionProperties {
+        let inner = self.inner.read().await;
+        let mut props = inner.properties.clone();
+        
+        // Update read-only properties based on current state
+        let can_send = match inner.state {
+            ConnectionState::Established => true,
+            ConnectionState::Establishing => false, // Could buffer, but say false for now
+            _ => false,
+        };
+        
+        let can_receive = match inner.state {
+            ConnectionState::Established => true,
+            _ => false,
+        };
+        
+        props.update_readonly(inner.state, can_send, can_receive);
+        
+        // Update MTU-related properties if we have a TCP stream
+        if let Some(ref _stream) = inner.tcp_stream {
+            // TODO: Query actual MTU from socket
+            // For now, use typical values
+            props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
+                ConnectionProperty::SingularTransmissionMsgMaxLen(Some(1460))); // Typical TCP MSS
+            props.properties.insert("sendMsgMaxLen".to_string(),
+                ConnectionProperty::SendMsgMaxLen(None)); // No limit for TCP
+            props.properties.insert("recvMsgMaxLen".to_string(),
+                ConnectionProperty::RecvMsgMaxLen(None)); // No limit for TCP
+        }
+        
+        props
+    }
+    
+    /// Get a specific connection property value
+    pub async fn get_property(&self, key: &str) -> Option<ConnectionProperty> {
+        let props = self.get_properties().await;
+        props.get(key).cloned()
     }
     
     /// Get the connection group ID if this connection is part of a group

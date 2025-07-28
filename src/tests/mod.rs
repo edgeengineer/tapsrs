@@ -22,4 +22,7 @@ mod message_sending_tests;
 mod message_properties_tests;
 
 #[cfg(test)]
+mod connection_properties_tests;
+
+#[cfg(test)]
 mod integration_tests;

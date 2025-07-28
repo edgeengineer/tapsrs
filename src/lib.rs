@@ -11,6 +11,7 @@ pub mod listener;
 pub mod message;
 pub mod error;
 pub mod framer;
+pub mod connection_properties;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;
@@ -23,6 +24,10 @@ pub use listener::Listener;
 pub use message::{Message, MessageContext};
 pub use error::{TransportServicesError, Result};
 pub use framer::{Framer, LengthPrefixFramer, FramerStack};
+pub use connection_properties::{
+    ConnectionProperty, ConnectionProperties, ChecksumCoverage, TimeoutValue,
+    SchedulerType, CapacityProfile, MultipathPolicy,
+};
 
 #[cfg(test)]
 mod tests;
