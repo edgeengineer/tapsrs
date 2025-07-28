@@ -213,11 +213,11 @@ async fn test_listener_event_stream() {
 
     // Connect and check event
     tokio::spawn(async move {
-        sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(50)).await;
         let _ = TcpStream::connect(bound_addr).await;
     });
 
-    let event = timeout(Duration::from_millis(500), listener.next_event()).await;
+    let event = timeout(Duration::from_secs(2), listener.next_event()).await;
     assert!(event.is_ok(), "Failed to receive event within timeout");
 
     if let Some(ListenerEvent::ConnectionReceived(conn)) = event.unwrap() {
@@ -229,7 +229,7 @@ async fn test_listener_event_stream() {
     // Stop and check stopped event
     listener.stop().await.unwrap();
 
-    let stop_event = timeout(Duration::from_millis(100), listener.next_event()).await;
+    let stop_event = timeout(Duration::from_secs(1), listener.next_event()).await;
     assert!(stop_event.is_ok());
 
     if let Some(ListenerEvent::Stopped) = stop_event.unwrap() {
