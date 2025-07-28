@@ -15,6 +15,7 @@ use tokio::sync::{RwLock, mpsc};
 use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use tokio::time::timeout;
+use socket2::Socket;
 
 
 /// A Connection represents an instance of a transport Protocol Stack
@@ -748,11 +749,12 @@ impl Connection {
         props.update_readonly(inner.state, can_send, can_receive);
         
         // Update MTU-related properties if we have a TCP stream
-        if let Some(ref _stream) = inner.tcp_stream {
-            // TODO: Query actual MTU from socket
-            // For now, use typical values
+        if let Some(ref stream) = inner.tcp_stream {
+            // Query actual MSS from socket
+            let mss = self.get_tcp_mss(stream).await.unwrap_or(1460); // Default to typical value if query fails
+            
             props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
-                ConnectionProperty::SingularTransmissionMsgMaxLen(Some(1460))); // Typical TCP MSS
+                ConnectionProperty::SingularTransmissionMsgMaxLen(Some(mss)));
             props.properties.insert("sendMsgMaxLen".to_string(),
                 ConnectionProperty::SendMsgMaxLen(None)); // No limit for TCP
             props.properties.insert("recvMsgMaxLen".to_string(),
@@ -823,6 +825,50 @@ impl Connection {
         // let _ = self.start_reading_task().await;
         
         let _ = self.event_sender.send(ConnectionEvent::Ready);
+    }
+    
+    /// Get the TCP Maximum Segment Size (MSS) from a TcpStream
+    async fn get_tcp_mss(&self, stream: &TcpStream) -> Result<usize> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::{AsRawFd, FromRawFd};
+            
+            // Get the raw file descriptor from the TcpStream
+            let fd = stream.as_raw_fd();
+            
+            // Create a Socket from the raw fd
+            // SAFETY: We're borrowing the fd from TcpStream, not taking ownership
+            let socket = unsafe { Socket::from_raw_fd(fd) };
+            
+            // Get the MSS value
+            #[cfg(not(target_os = "redox"))]
+            let mss_result = socket.mss();
+            
+            #[cfg(target_os = "redox")]
+            let mss_result = Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "TCP MSS query not supported on Redox"
+            ));
+            
+            // Important: We must forget the socket to prevent it from closing the fd
+            // when it goes out of scope (since we don't own the fd)
+            std::mem::forget(socket);
+            
+            match mss_result {
+                Ok(mss) => Ok(mss as usize),
+                Err(e) => {
+                    // Log the error but don't fail
+                    log::debug!("Failed to get TCP MSS: {}", e);
+                    Err(TransportServicesError::NotSupported(format!("Failed to get TCP MSS: {}", e)))
+                }
+            }
+        }
+        
+        #[cfg(not(unix))]
+        {
+            // On non-Unix platforms, return a typical default value
+            Ok(1460)
+        }
     }
 }
 

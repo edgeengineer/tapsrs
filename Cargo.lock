@@ -2418,6 +2418,7 @@ dependencies = [
  "futures",
  "log",
  "quinn",
+ "socket2 0.5.10",
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls",

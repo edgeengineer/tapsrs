@@ -19,6 +19,7 @@ log = "0.4.27"
 bytes = "1.10.1"
 futures = "0.3.31"
 uuid = { version = "1.11", features = ["v4"] }
+socket2 = { version = "0.5", features = ["all"] }
 
 # Optional dependencies for specific transports
 quinn = { version = "0.11.8", optional = true }

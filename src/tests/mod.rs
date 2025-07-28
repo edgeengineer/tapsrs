@@ -28,4 +28,7 @@ mod connection_properties_tests;
 mod endpoint_management_tests;
 
 #[cfg(test)]
+mod mtu_tests;
+
+#[cfg(test)]
 mod integration_tests;
