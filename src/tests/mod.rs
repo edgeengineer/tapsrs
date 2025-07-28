@@ -49,4 +49,7 @@ mod tcp_properties_tests;
 mod lifecycle_events_tests;
 
 #[cfg(test)]
+mod connection_termination_tests;
+
+#[cfg(test)]
 mod integration_tests;
