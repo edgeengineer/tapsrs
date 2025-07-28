@@ -40,6 +40,17 @@ pub enum EndpointIdentifier {
         port: u16,
         credentials: Option<StunCredentials>,
     },
+    /// Multicast group IP address (for send operations)
+    MulticastGroupIP(IpAddr),
+    /// Any-source multicast (ASM) group (for receive operations)
+    AnySourceMulticastGroupIP(IpAddr),
+    /// Single-source multicast (SSM) group (for receive operations)
+    SingleSourceMulticastGroupIP {
+        group: IpAddr,
+        source: IpAddr,
+    },
+    /// Hop limit for multicast packets
+    HopLimit(u8),
 }
 
 /// STUN server credentials
@@ -55,11 +66,284 @@ pub struct LocalEndpoint {
     pub identifiers: Vec<EndpointIdentifier>,
 }
 
+impl LocalEndpoint {
+    /// Create a new empty LocalEndpoint
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new LocalEndpoint builder
+    pub fn builder() -> LocalEndpointBuilder {
+        LocalEndpointBuilder::new()
+    }
+    
+    /// Add an interface identifier
+    /// RFC Section 6.1: LocalSpecifier.WithInterface("en0")
+    pub fn with_interface(mut self, interface: impl Into<String>) -> Self {
+        self.identifiers.push(EndpointIdentifier::Interface(interface.into()));
+        self
+    }
+    
+    /// Add a port number
+    /// RFC Section 6.1: LocalSpecifier.WithPort(443)
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.identifiers.push(EndpointIdentifier::Port(port));
+        self
+    }
+    
+    /// Add an IP address
+    /// RFC Section 6.1: LocalSpecifier.WithIPAddress(192.0.2.21)
+    pub fn with_ip_address(mut self, addr: IpAddr) -> Self {
+        self.identifiers.push(EndpointIdentifier::IpAddress(addr));
+        self
+    }
+    
+    /// Add a STUN server for NAT traversal
+    /// RFC Section 6.1: LocalSpecifier.WithStunServer(address, port, credentials)
+    pub fn with_stun_server(
+        mut self,
+        address: impl Into<String>,
+        port: u16,
+        credentials: Option<StunCredentials>,
+    ) -> Self {
+        self.identifiers.push(EndpointIdentifier::StunServer {
+            address: address.into(),
+            port,
+            credentials,
+        });
+        self
+    }
+    
+    /// Add an any-source multicast group IP address (for receive operations)
+    /// RFC Section 6.1.1: LocalSpecifier.JoinGroup(group_ip, [None])
+    pub fn with_any_source_multicast_group_ip(mut self, group: IpAddr) -> Self {
+        self.identifiers.push(EndpointIdentifier::AnySourceMulticastGroupIP(group));
+        self
+    }
+    
+    /// Add a single-source multicast group IP address (for receive operations)
+    /// RFC Section 6.1.1: LocalSpecifier.JoinGroup(group_ip, source_ip)
+    pub fn with_single_source_multicast_group_ip(mut self, group: IpAddr, source: IpAddr) -> Self {
+        self.identifiers.push(EndpointIdentifier::SingleSourceMulticastGroupIP {
+            group,
+            source,
+        });
+        self
+    }
+}
+
+/// Builder for LocalEndpoint
+pub struct LocalEndpointBuilder {
+    endpoint: LocalEndpoint,
+}
+
+impl LocalEndpointBuilder {
+    /// Create a new builder
+    pub fn new() -> Self {
+        Self {
+            endpoint: LocalEndpoint::new(),
+        }
+    }
+    
+    /// Add an interface identifier
+    pub fn interface(mut self, interface: impl Into<String>) -> Self {
+        self.endpoint = self.endpoint.with_interface(interface);
+        self
+    }
+    
+    /// Add a port number
+    pub fn port(mut self, port: u16) -> Self {
+        self.endpoint = self.endpoint.with_port(port);
+        self
+    }
+    
+    /// Add an IP address
+    pub fn ip_address(mut self, addr: IpAddr) -> Self {
+        self.endpoint = self.endpoint.with_ip_address(addr);
+        self
+    }
+    
+    /// Add a STUN server
+    pub fn stun_server(
+        mut self,
+        address: impl Into<String>,
+        port: u16,
+        credentials: Option<StunCredentials>,
+    ) -> Self {
+        self.endpoint = self.endpoint.with_stun_server(address, port, credentials);
+        self
+    }
+    
+    /// Add an any-source multicast group IP address
+    pub fn any_source_multicast_group_ip(mut self, group: IpAddr) -> Self {
+        self.endpoint = self.endpoint.with_any_source_multicast_group_ip(group);
+        self
+    }
+    
+    /// Add a single-source multicast group IP address
+    pub fn single_source_multicast_group_ip(mut self, group: IpAddr, source: IpAddr) -> Self {
+        self.endpoint = self.endpoint.with_single_source_multicast_group_ip(group, source);
+        self
+    }
+    
+    /// Build the LocalEndpoint
+    pub fn build(self) -> LocalEndpoint {
+        self.endpoint
+    }
+}
+
+impl Default for LocalEndpointBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Remote endpoint specification
 #[derive(Debug, Clone, Default)]
 pub struct RemoteEndpoint {
     pub identifiers: Vec<EndpointIdentifier>,
     pub protocol: Option<Protocol>,
+}
+
+impl RemoteEndpoint {
+    /// Create a new empty RemoteEndpoint
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new RemoteEndpoint builder
+    pub fn builder() -> RemoteEndpointBuilder {
+        RemoteEndpointBuilder::new()
+    }
+    
+    /// Add a hostname
+    /// RFC Section 6.1: RemoteSpecifier.WithHostName("example.com")
+    pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
+        self.identifiers.push(EndpointIdentifier::HostName(hostname.into()));
+        self
+    }
+    
+    /// Add a port number
+    /// RFC Section 6.1: RemoteSpecifier.WithPort(443)
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.identifiers.push(EndpointIdentifier::Port(port));
+        self
+    }
+    
+    /// Add a service name
+    /// RFC Section 6.1: RemoteSpecifier.WithService("https")
+    pub fn with_service(mut self, service: impl Into<String>) -> Self {
+        self.identifiers.push(EndpointIdentifier::Service(service.into()));
+        self
+    }
+    
+    /// Add an IP address
+    /// RFC Section 6.1: RemoteSpecifier.WithIPAddress(192.0.2.21)
+    pub fn with_ip_address(mut self, addr: IpAddr) -> Self {
+        self.identifiers.push(EndpointIdentifier::IpAddress(addr));
+        self
+    }
+    
+    /// Add an interface (for link-local addresses)
+    /// RFC Section 6.1: Used to qualify link-local addresses
+    pub fn with_interface(mut self, interface: impl Into<String>) -> Self {
+        self.identifiers.push(EndpointIdentifier::Interface(interface.into()));
+        self
+    }
+    
+    /// Set the protocol for protocol-specific endpoints
+    /// RFC Section 6.1.3: RemoteSpecifier.WithProtocol(QUIC)
+    pub fn with_protocol(mut self, protocol: Protocol) -> Self {
+        self.protocol = Some(protocol);
+        self
+    }
+    
+    /// Add a multicast group IP address (for send operations)
+    /// RFC Section 6.1.1: RemoteSpecifier.WithIPAddress(multicast_group_ip)
+    pub fn with_multicast_group_ip(mut self, group: IpAddr) -> Self {
+        self.identifiers.push(EndpointIdentifier::MulticastGroupIP(group));
+        self
+    }
+    
+    /// Set the hop limit for multicast packets
+    /// RFC Section 6.1.1: HopLimit configuration for multicast
+    pub fn with_hop_limit(mut self, hop_limit: u8) -> Self {
+        self.identifiers.push(EndpointIdentifier::HopLimit(hop_limit));
+        self
+    }
+}
+
+/// Builder for RemoteEndpoint
+pub struct RemoteEndpointBuilder {
+    endpoint: RemoteEndpoint,
+}
+
+impl RemoteEndpointBuilder {
+    /// Create a new builder
+    pub fn new() -> Self {
+        Self {
+            endpoint: RemoteEndpoint::new(),
+        }
+    }
+    
+    /// Add a hostname
+    pub fn hostname(mut self, hostname: impl Into<String>) -> Self {
+        self.endpoint = self.endpoint.with_hostname(hostname);
+        self
+    }
+    
+    /// Add a port number
+    pub fn port(mut self, port: u16) -> Self {
+        self.endpoint = self.endpoint.with_port(port);
+        self
+    }
+    
+    /// Add a service name
+    pub fn service(mut self, service: impl Into<String>) -> Self {
+        self.endpoint = self.endpoint.with_service(service);
+        self
+    }
+    
+    /// Add an IP address
+    pub fn ip_address(mut self, addr: IpAddr) -> Self {
+        self.endpoint = self.endpoint.with_ip_address(addr);
+        self
+    }
+    
+    /// Add an interface
+    pub fn interface(mut self, interface: impl Into<String>) -> Self {
+        self.endpoint = self.endpoint.with_interface(interface);
+        self
+    }
+    
+    /// Set the protocol
+    pub fn protocol(mut self, protocol: Protocol) -> Self {
+        self.endpoint = self.endpoint.with_protocol(protocol);
+        self
+    }
+    
+    /// Add a multicast group IP address
+    pub fn multicast_group_ip(mut self, group: IpAddr) -> Self {
+        self.endpoint = self.endpoint.with_multicast_group_ip(group);
+        self
+    }
+    
+    /// Set the hop limit for multicast packets
+    pub fn hop_limit(mut self, hop_limit: u8) -> Self {
+        self.endpoint = self.endpoint.with_hop_limit(hop_limit);
+        self
+    }
+    
+    /// Build the RemoteEndpoint
+    pub fn build(self) -> RemoteEndpoint {
+        self.endpoint
+    }
+}
+
+impl Default for RemoteEndpointBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Supported protocols

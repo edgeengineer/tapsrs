@@ -4,29 +4,29 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 ## Phase 0: Project Setup & Core Abstractions
 
-- [ ] Initialize a new Rust library crate named `TransportServices`.
-- [ ] Define core data structures based on **RFC Section 1.1 (Terminology and Notation)** (e.g., custom types for `Preference`, `EndpointIdentifier`, etc.).
-- [ ] Define the primary public objects as Rust structs (**RFC Section 3, API Summary**): `Preconnection`, `Connection`, `Listener`, `Message`, `MessageContext`.
-- [ ] Set up cross-compilation toolchains and targets in `rustup`:
-    - [ ] `aarch64-apple-ios`
-    - [ ] `aarch64-apple-darwin` (Apple Silicon macOS)
-    - [ ] `x86_64-unknown-linux-gnu`
-    - [ ] `aarch64-unknown-linux-gnu`
-    - [ ] `aarch64-linux-android`
-    - [ ] `x86_64-pc-windows-msvc`
-    - [ ] `aarch64-pc-windows-msvc`
-- [ ] Configure `Cargo.toml` to produce a `staticlib` crate type.
-- [ ] Integrate `tokio` as the core asynchronous runtime.
-- [ ] Design a C-compatible Foreign Function Interface (FFI) layer for the public API to ensure interoperability with Swift, Kotlin/JNI, and C++ (**RFC Appendix A, Implementation Mapping**).
+- [x] Initialize a new Rust library crate named `TransportServices`.
+- [x] Define core data structures based on **RFC Section 1.1 (Terminology and Notation)** (e.g., custom types for `Preference`, `EndpointIdentifier`, etc.).
+- [x] Define the primary public objects as Rust structs (**RFC Section 3, API Summary**): `Preconnection`, `Connection`, `Listener`, `Message`, `MessageContext`.
+- [x] Set up cross-compilation toolchains and targets in `rustup`:
+    - [x] `aarch64-apple-ios`
+    - [x] `aarch64-apple-darwin` (Apple Silicon macOS)
+    - [x] `x86_64-unknown-linux-gnu`
+    - [x] `aarch64-unknown-linux-gnu`
+    - [x] `aarch64-linux-android`
+    - [x] `x86_64-pc-windows-msvc`
+    - [x] `aarch64-pc-windows-msvc`
+- [x] Configure `Cargo.toml` to produce a `staticlib` crate type.
+- [x] Integrate `tokio` as the core asynchronous runtime.
+- [x] Design a C-compatible Foreign Function Interface (FFI) layer for the public API to ensure interoperability with Swift, Kotlin/JNI, and C++ (**RFC Appendix A, Implementation Mapping**).
 
 ## Phase 1: Pre-establishment (RFC Section 6, Preestablishment Phase)
 
-- [ ] Implement the `Preconnection` object and its creation (`NewPreconnection`) as defined in **RFC Section 6**.
-- [ ] Implement Endpoint specification (**RFC Section 6.1, Specifying Endpoints**):
-    - [ ] `LocalEndpoint` and `RemoteEndpoint` structs.
-    - [ ] Builder methods for setting identifiers: `WithHostName`, `WithPort`, `WithService`, `WithIPAddress`, `WithInterface`.
-    - [ ] Support for Multicast endpoints (**RFC Section 6.1.1, Using Multicast Endpoints**).
-    - [ ] Support for Protocol-Specific endpoints (**RFC Section 6.1.3, Protocol-Specific Endpoints**).
+- [x] Implement the `Preconnection` object and its creation (`NewPreconnection`) as defined in **RFC Section 6**.
+- [x] Implement Endpoint specification (**RFC Section 6.1, Specifying Endpoints**):
+    - [x] `LocalEndpoint` and `RemoteEndpoint` structs.
+    - [x] Builder methods for setting identifiers: `WithHostName`, `WithPort`, `WithService`, `WithIPAddress`, `WithInterface`.
+    - [x] Support for Multicast endpoints (**RFC Section 6.1.1, Using Multicast Endpoints**).
+    - [x] Support for Protocol-Specific endpoints (**RFC Section 6.1.3, Protocol-Specific Endpoints**).
 - [ ] Implement Transport Properties specification (**RFC Section 4, Transport Properties & 6.2, Specifying Transport Properties**):
     - [ ] `TransportProperties` struct.
     - [ ] A `Set` method for properties, likely using an enum to represent property keys.

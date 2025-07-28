@@ -14,7 +14,7 @@ pub mod error;
 pub mod ffi;
 
 pub use types::*;
-pub use preconnection::Preconnection;
+pub use preconnection::{Preconnection, new_preconnection};
 pub use connection::Connection;
 pub use listener::Listener;
 pub use message::{Message, MessageContext};
