@@ -60,11 +60,11 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] Return a `Connection` object.
     - [x] Use `tokio::net::TcpStream::connect` and other Tokio APIs for the underlying network operations.
     - [x] Implement an event system (e.g., via FFI callbacks) to signal `Ready` or `EstablishmentError`.
-- [ ] Implement Passive Open: `Preconnection.Listen()` (**RFC Section 7.2, Passive Open: Listen**).
-    - [ ] Return a `Listener` object.
-    - [ ] Use `tokio::net::TcpListener` for asynchronous listening.
-    - [ ] Emit `ConnectionReceived` events containing new `Connection` objects.
-    - [ ] Implement `Listener.Stop()`.
+- [x] Implement Passive Open: `Preconnection.Listen()` (**RFC Section 7.2, Passive Open: Listen**).
+    - [x] Return a `Listener` object.
+    - [x] Use `tokio::net::TcpListener` for asynchronous listening.
+    - [x] Emit `ConnectionReceived` events containing new `Connection` objects.
+    - [x] Implement `Listener.Stop()`.
 - [ ] Implement Peer-to-Peer Establishment: `Preconnection.Rendezvous()` (**RFC Section 7.3, Peer-to-Peer Establishment: Rendezvous**).
     - [ ] This is a complex feature. Plan for a phased implementation, potentially starting with basic cases and later adding full NAT traversal (ICE-like) logic.
     - [ ] Implement `Preconnection.Resolve()` to gather candidates.
