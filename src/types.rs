@@ -684,8 +684,7 @@ pub struct MessageProperties {
 }
 
 /// Multipath configuration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultipathConfig {
     #[default]
     Disabled,
@@ -693,10 +692,8 @@ pub enum MultipathConfig {
     Passive,
 }
 
-
 /// Communication direction
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CommunicationDirection {
     #[default]
     Bidirectional,

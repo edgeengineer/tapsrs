@@ -84,8 +84,7 @@ pub enum ConnectionProperty {
 }
 
 /// Checksum coverage specification
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ChecksumCoverage {
     /// Full message coverage
     #[default]
@@ -95,8 +94,7 @@ pub enum ChecksumCoverage {
 }
 
 /// Timeout value specification
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeoutValue {
     /// Timeout is disabled
     #[default]
@@ -106,8 +104,7 @@ pub enum TimeoutValue {
 }
 
 /// Connection scheduler types (8.1.5)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SchedulerType {
     /// Weighted Fair Queueing (default)
     #[default]
@@ -121,8 +118,7 @@ pub enum SchedulerType {
 }
 
 /// Capacity profile types (8.1.6)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CapacityProfile {
     /// Default (Best Effort)
     #[default]
@@ -138,8 +134,7 @@ pub enum CapacityProfile {
 }
 
 /// Multipath policy types (8.1.7)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultipathPolicy {
     /// Use only a single path at a time, failover when needed
     #[default]
@@ -149,11 +144,6 @@ pub enum MultipathPolicy {
     /// Use multiple paths redundantly
     Redundant,
 }
-
-
-
-
-
 
 /// Storage for connection properties
 #[derive(Debug, Clone, Default)]

@@ -622,7 +622,9 @@ async fn test_rendezvous_peer_to_peer() {
 
     // Or accept incoming connection
     if !a_established {
-        if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_millis(100), listener_a.accept()).await {
+        if let Ok(Ok(_)) =
+            tokio::time::timeout(Duration::from_millis(100), listener_a.accept()).await
+        {
             // Got incoming connection
         }
     }
