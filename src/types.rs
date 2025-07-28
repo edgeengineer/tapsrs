@@ -646,7 +646,6 @@ impl Default for CommunicationDirection {
 }
 
 /// Security parameters for connections
-#[derive(Debug, Clone)]
 pub struct SecurityParameters {
     pub disabled: bool,
     pub opportunistic: bool,
@@ -661,6 +660,176 @@ pub struct SecurityParameters {
     pub max_cached_sessions: Option<usize>,
     pub cached_session_lifetime_seconds: Option<u64>,
     pub pre_shared_key: Option<PreSharedKey>,
+    // Callbacks are stored as Option<Box<dyn Fn>> in Rust
+    // For FFI, we'll use function pointers
+    #[cfg(not(feature = "ffi"))]
+    pub trust_verification_callback: Option<Box<dyn Fn(&CertificateChain) -> bool + Send + Sync>>,
+    #[cfg(not(feature = "ffi"))]
+    pub identity_challenge_callback: Option<Box<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>>,
+}
+
+impl SecurityParameters {
+    /// Create new SecurityParameters with secure defaults
+    /// RFC Section 6.3: NewSecurityParameters()
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Create disabled security parameters (no security)
+    /// RFC Section 6.3: NewDisabledSecurityParameters()
+    pub fn new_disabled() -> Self {
+        Self {
+            disabled: true,
+            ..Default::default()
+        }
+    }
+    
+    /// Create opportunistic security parameters (try security, fall back if unavailable)
+    /// RFC Section 6.3: NewOpportunisticSecurityParameters()
+    pub fn new_opportunistic() -> Self {
+        Self {
+            opportunistic: true,
+            ..Default::default()
+        }
+    }
+    
+    /// Set a security parameter value
+    /// RFC Section 6.3: SecurityParameters.Set(property, value)
+    pub fn set(&mut self, parameter: SecurityParameter, value: SecurityParameterValue) -> &mut Self {
+        match parameter {
+            SecurityParameter::Disabled => {
+                if let SecurityParameterValue::Bool(val) = value {
+                    self.disabled = val;
+                }
+            }
+            SecurityParameter::Opportunistic => {
+                if let SecurityParameterValue::Bool(val) = value {
+                    self.opportunistic = val;
+                }
+            }
+            SecurityParameter::AllowedProtocols => {
+                if let SecurityParameterValue::Protocols(protocols) = value {
+                    self.allowed_protocols = protocols;
+                }
+            }
+            SecurityParameter::ServerCertificate => {
+                if let SecurityParameterValue::Certificates(certs) = value {
+                    self.server_certificate = certs;
+                }
+            }
+            SecurityParameter::ClientCertificate => {
+                if let SecurityParameterValue::Certificates(certs) = value {
+                    self.client_certificate = certs;
+                }
+            }
+            SecurityParameter::PinnedServerCertificate => {
+                if let SecurityParameterValue::CertificateChains(chains) = value {
+                    self.pinned_server_certificate = chains;
+                }
+            }
+            SecurityParameter::Alpn => {
+                if let SecurityParameterValue::Strings(protocols) = value {
+                    self.alpn = protocols;
+                }
+            }
+            SecurityParameter::SupportedGroups => {
+                if let SecurityParameterValue::Strings(groups) = value {
+                    self.supported_groups = groups;
+                }
+            }
+            SecurityParameter::Ciphersuites => {
+                if let SecurityParameterValue::Strings(suites) = value {
+                    self.ciphersuites = suites;
+                }
+            }
+            SecurityParameter::SignatureAlgorithms => {
+                if let SecurityParameterValue::Strings(algos) = value {
+                    self.signature_algorithms = algos;
+                }
+            }
+            SecurityParameter::MaxCachedSessions => {
+                if let SecurityParameterValue::Size(size) = value {
+                    self.max_cached_sessions = Some(size);
+                }
+            }
+            SecurityParameter::CachedSessionLifetimeSeconds => {
+                if let SecurityParameterValue::U64(seconds) = value {
+                    self.cached_session_lifetime_seconds = Some(seconds);
+                }
+            }
+            SecurityParameter::PreSharedKey => {
+                if let SecurityParameterValue::Psk(psk) = value {
+                    self.pre_shared_key = Some(psk);
+                }
+            }
+        }
+        self
+    }
+    
+    /// Set trust verification callback
+    #[cfg(not(feature = "ffi"))]
+    pub fn set_trust_verification_callback<F>(&mut self, callback: F) -> &mut Self
+    where
+        F: Fn(&CertificateChain) -> bool + Send + Sync + 'static,
+    {
+        self.trust_verification_callback = Some(Box::new(callback));
+        self
+    }
+    
+    /// Set identity challenge callback  
+    #[cfg(not(feature = "ffi"))]
+    pub fn set_identity_challenge_callback<F>(&mut self, callback: F) -> &mut Self
+    where
+        F: Fn(&[u8]) -> Vec<u8> + Send + Sync + 'static,
+    {
+        self.identity_challenge_callback = Some(Box::new(callback));
+        self
+    }
+}
+
+impl std::fmt::Debug for SecurityParameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecurityParameters")
+            .field("disabled", &self.disabled)
+            .field("opportunistic", &self.opportunistic)
+            .field("allowed_protocols", &self.allowed_protocols)
+            .field("server_certificate", &self.server_certificate.len())
+            .field("client_certificate", &self.client_certificate.len())
+            .field("pinned_server_certificate", &self.pinned_server_certificate.len())
+            .field("alpn", &self.alpn)
+            .field("supported_groups", &self.supported_groups)
+            .field("ciphersuites", &self.ciphersuites)
+            .field("signature_algorithms", &self.signature_algorithms)
+            .field("max_cached_sessions", &self.max_cached_sessions)
+            .field("cached_session_lifetime_seconds", &self.cached_session_lifetime_seconds)
+            .field("pre_shared_key", &self.pre_shared_key.is_some())
+            .finish()
+    }
+}
+
+impl Clone for SecurityParameters {
+    fn clone(&self) -> Self {
+        Self {
+            disabled: self.disabled,
+            opportunistic: self.opportunistic,
+            allowed_protocols: self.allowed_protocols.clone(),
+            server_certificate: self.server_certificate.clone(),
+            client_certificate: self.client_certificate.clone(),
+            pinned_server_certificate: self.pinned_server_certificate.clone(),
+            alpn: self.alpn.clone(),
+            supported_groups: self.supported_groups.clone(),
+            ciphersuites: self.ciphersuites.clone(),
+            signature_algorithms: self.signature_algorithms.clone(),
+            max_cached_sessions: self.max_cached_sessions,
+            cached_session_lifetime_seconds: self.cached_session_lifetime_seconds,
+            pre_shared_key: self.pre_shared_key.clone(),
+            // Callbacks cannot be cloned, so new instances will have None
+            #[cfg(not(feature = "ffi"))]
+            trust_verification_callback: None,
+            #[cfg(not(feature = "ffi"))]
+            identity_challenge_callback: None,
+        }
+    }
 }
 
 impl Default for SecurityParameters {
@@ -679,8 +848,43 @@ impl Default for SecurityParameters {
             max_cached_sessions: None,
             cached_session_lifetime_seconds: None,
             pre_shared_key: None,
+            #[cfg(not(feature = "ffi"))]
+            trust_verification_callback: None,
+            #[cfg(not(feature = "ffi"))]
+            identity_challenge_callback: None,
         }
     }
+}
+
+/// Enumeration of security parameters
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityParameter {
+    Disabled,
+    Opportunistic,
+    AllowedProtocols,
+    ServerCertificate,
+    ClientCertificate,
+    PinnedServerCertificate,
+    Alpn,
+    SupportedGroups,
+    Ciphersuites,
+    SignatureAlgorithms,
+    MaxCachedSessions,
+    CachedSessionLifetimeSeconds,
+    PreSharedKey,
+}
+
+/// Values that can be assigned to security parameters
+#[derive(Debug, Clone)]
+pub enum SecurityParameterValue {
+    Bool(bool),
+    Protocols(Vec<SecurityProtocol>),
+    Certificates(Vec<Certificate>),
+    CertificateChains(Vec<CertificateChain>),
+    Strings(Vec<String>),
+    Size(usize),
+    U64(u64),
+    Psk(PreSharedKey),
 }
 
 /// Supported security protocols

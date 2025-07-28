@@ -8,6 +8,7 @@ pub mod listener;
 pub mod message;
 pub mod error;
 pub mod transport_properties;
+pub mod security_parameters;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};

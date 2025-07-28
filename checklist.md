@@ -48,11 +48,11 @@ This document outlines the phases and steps required to implement the TAPS (Tran
         - [x] `direction` (**6.2.16, Direction of Communication**)
         - [x] `softErrorNotify` (**6.2.17, Notification of ICMP Soft Error Message Arrival**)
         - [x] `activeReadBeforeSend` (**6.2.18, Initiating Side Is Not the First to Write**)
-- [ ] Implement Security Parameters specification (**RFC Section 6.3, Specifying Security Parameters and Callbacks**):
-    - [ ] `SecurityParameters` struct.
-    - [ ] Functions for disabled and opportunistic security.
-    - [ ] `Set` method for parameters like `allowedSecurityProtocols` (**6.3.1, Allowed Security Protocols**), certificates (**6.3.2, Certificate Bundles**), ALPN (**6.3.4, Application-Layer Protocol Negotiation**), etc.
-    - [ ] Implement callback mechanisms for trust verification and identity challenges using function pointers (`extern "C" fn`) in the FFI layer (**6.3.8, Connection Establishment Callbacks**).
+- [x] Implement Security Parameters specification (**RFC Section 6.3, Specifying Security Parameters and Callbacks**):
+    - [x] `SecurityParameters` struct.
+    - [x] Functions for disabled and opportunistic security.
+    - [x] `Set` method for parameters like `allowedSecurityProtocols` (**6.3.1, Allowed Security Protocols**), certificates (**6.3.2, Certificate Bundles**), ALPN (**6.3.4, Application-Layer Protocol Negotiation**), etc.
+    - [x] Implement callback mechanisms for trust verification and identity challenges using function pointers (`extern "C" fn`) in the FFI layer (**6.3.8, Connection Establishment Callbacks**).
 
 ## Phase 2: Connection Establishment (RFC Section 7, Establishing Connections)
 
