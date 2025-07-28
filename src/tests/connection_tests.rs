@@ -31,119 +31,137 @@ async fn start_echo_server() -> SocketAddr {
 
 #[tokio::test]
 async fn test_connection_establishment() {
-    let server_addr = start_echo_server().await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
+    let test_body = async {
+        let server_addr = start_echo_server().await;
         
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let connection = preconn.initiate().await.unwrap();
-    
-    // Wait for connection to be established
-    let mut established = false;
-    for _ in 0..10 {
-        match connection.state().await {
-            ConnectionState::Established => {
-                established = true;
-                break;
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+            
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let connection = preconn.initiate().await.unwrap();
+        
+        // Wait for connection to be established
+        let mut established = false;
+        for _ in 0..10 {
+            match connection.state().await {
+                ConnectionState::Established => {
+                    established = true;
+                    break;
+                }
+                ConnectionState::Establishing => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                _ => break,
             }
-            ConnectionState::Establishing => {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            _ => break,
         }
-    }
+        
+        assert!(established, "Connection should be established");
+        
+        // Clean up
+        connection.close().await.unwrap();
+    };
     
-    assert!(established, "Connection should be established");
-    
-    // Clean up
-    connection.close().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), test_body)
+        .await
+        .expect("Test timed out");
 }
 
 #[tokio::test]
 async fn test_connection_send_receive() {
-    let server_addr = start_echo_server().await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
+    let test_body = async {
+        let server_addr = start_echo_server().await;
         
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+            
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let connection = preconn.initiate().await.unwrap();
+        
+        // Wait for establishment
+        while connection.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        // Send a message
+        let msg = Message::from_string("Hello, Transport Services!");
+        connection.send(msg).await.unwrap();
+        
+        // Note: Receive is not yet implemented, so we can't test echo
+        // But at least verify send doesn't fail
+        
+        connection.close().await.unwrap();
+    };
     
-    let connection = preconn.initiate().await.unwrap();
-    
-    // Wait for establishment
-    while connection.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    // Send a message
-    let msg = Message::from_string("Hello, Transport Services!");
-    connection.send(msg).await.unwrap();
-    
-    // Note: Receive is not yet implemented, so we can't test echo
-    // But at least verify send doesn't fail
-    
-    connection.close().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), test_body)
+        .await
+        .expect("Test timed out");
 }
 
 #[tokio::test] 
 async fn test_connection_events() {
-    let server_addr = start_echo_server().await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
+    let test_body = async {
+        let server_addr = start_echo_server().await;
         
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let connection = preconn.initiate().await.unwrap();
-    
-    // Listen for Ready event
-    let event = timeout(Duration::from_secs(5), connection.next_event()).await;
-    assert!(event.is_ok(), "Should receive event within timeout");
-    
-    if let Ok(Some(evt)) = event {
-        match evt {
-            ConnectionEvent::Ready => {
-                // Expected
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+            
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let connection = preconn.initiate().await.unwrap();
+        
+        // Listen for Ready event
+        let event = timeout(Duration::from_secs(5), connection.next_event()).await;
+        assert!(event.is_ok(), "Should receive event within timeout");
+        
+        if let Ok(Some(evt)) = event {
+            match evt {
+                ConnectionEvent::Ready => {
+                    // Expected
+                }
+                ConnectionEvent::EstablishmentError(msg) => {
+                    panic!("Unexpected establishment error: {}", msg);
+                }
+                _ => panic!("Unexpected event type"),
             }
-            ConnectionEvent::EstablishmentError(msg) => {
-                panic!("Unexpected establishment error: {}", msg);
-            }
-            _ => panic!("Unexpected event type"),
         }
-    }
+        
+        // Close and wait for Closed event
+        connection.close().await.unwrap();
+        
+        let event = timeout(Duration::from_secs(1), connection.next_event()).await;
+        if let Ok(Some(ConnectionEvent::Closed)) = event {
+            // Expected
+        } else {
+            panic!("Should receive Closed event");
+        }
+    };
     
-    // Close and wait for Closed event
-    connection.close().await.unwrap();
-    
-    let event = timeout(Duration::from_secs(1), connection.next_event()).await;
-    if let Ok(Some(ConnectionEvent::Closed)) = event {
-        // Expected
-    } else {
-        panic!("Should receive Closed event");
-    }
+    tokio::time::timeout(Duration::from_secs(10), test_body)
+        .await
+        .expect("Test timed out");
 }
 
 #[tokio::test]
@@ -196,37 +214,43 @@ async fn test_message_properties() {
 
 #[tokio::test]
 async fn test_queued_messages() {
-    let server_addr = start_echo_server().await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
+    let test_body = async {
+        let server_addr = start_echo_server().await;
         
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+            
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let connection = preconn.initiate().await.unwrap();
+        
+        // Send messages while still establishing
+        let msg1 = Message::from_string("Message 1");
+        let msg2 = Message::from_string("Message 2");
+        
+        // These should be queued
+        connection.send(msg1).await.unwrap();
+        connection.send(msg2).await.unwrap();
+        
+        // Wait for establishment
+        while connection.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        // Messages should have been sent automatically
+        // (We can't verify this without receive, but at least no errors)
+        
+        connection.close().await.unwrap();
+    };
     
-    let connection = preconn.initiate().await.unwrap();
-    
-    // Send messages while still establishing
-    let msg1 = Message::from_string("Message 1");
-    let msg2 = Message::from_string("Message 2");
-    
-    // These should be queued
-    connection.send(msg1).await.unwrap();
-    connection.send(msg2).await.unwrap();
-    
-    // Wait for establishment
-    while connection.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    // Messages should have been sent automatically
-    // (We can't verify this without receive, but at least no errors)
-    
-    connection.close().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), test_body)
+        .await
+        .expect("Test timed out");
 }

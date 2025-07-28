@@ -47,23 +47,76 @@ async fn start_test_server(protocol: &'static str) -> SocketAddr {
 
 #[tokio::test]
 async fn test_multiple_connections() {
-    let server_addr = start_test_server("echo").await;
+    let test_body = async {
+        let server_addr = start_test_server("echo").await;
+        
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+        
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        // Create multiple connections
+        let mut connections = Vec::new();
+        for i in 0..5 {
+            let conn = preconn.initiate().await.unwrap();
+            
+            // Wait for establishment
+            while conn.state().await == ConnectionState::Establishing {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            
+            assert_eq!(conn.state().await, ConnectionState::Established);
+            
+            // Send unique message
+            let msg = Message::from_string(&format!("Connection {}", i));
+            conn.send(msg).await.unwrap();
+            
+            connections.push(conn);
+        }
+        
+        // Close all connections
+        for conn in connections {
+            conn.close().await.unwrap();
+        }
+    };
     
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
-    
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    // Create multiple connections
-    let mut connections = Vec::new();
-    for i in 0..5 {
+    tokio::time::timeout(Duration::from_secs(10), test_body).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_transport_properties_application() {
+    let test_body = async {
+        let server_addr = start_test_server("echo").await;
+        
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+        
+        // Create preconnection with specific transport properties
+        let props = TransportProperties::builder()
+            .reliability(Preference::Require)
+            .preserve_order(Preference::Require)
+            .congestion_control(Preference::Require)
+            .keep_alive(Preference::Prefer)
+            .connection_timeout(Duration::from_secs(10))
+            .connection_priority(100)
+            .build();
+        
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            props,
+            SecurityParameters::new_disabled(),
+        );
+        
         let conn = preconn.initiate().await.unwrap();
         
         // Wait for establishment
@@ -73,137 +126,100 @@ async fn test_multiple_connections() {
         
         assert_eq!(conn.state().await, ConnectionState::Established);
         
-        // Send unique message
-        let msg = Message::from_string(&format!("Connection {}", i));
+        // Send some data
+        let msg = Message::from_string("Test with properties")
+            .with_priority(50)
+            .safely_replayable();
         conn.send(msg).await.unwrap();
         
-        connections.push(conn);
-    }
-    
-    // Close all connections
-    for conn in connections {
         conn.close().await.unwrap();
-    }
-}
+    };
 
-#[tokio::test]
-async fn test_transport_properties_application() {
-    let server_addr = start_test_server("echo").await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
-    
-    // Create preconnection with specific transport properties
-    let props = TransportProperties::builder()
-        .reliability(Preference::Require)
-        .preserve_order(Preference::Require)
-        .congestion_control(Preference::Require)
-        .keep_alive(Preference::Prefer)
-        .connection_timeout(Duration::from_secs(10))
-        .connection_priority(100)
-        .build();
-    
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        props,
-        SecurityParameters::new_disabled(),
-    );
-    
-    let conn = preconn.initiate().await.unwrap();
-    
-    // Wait for establishment
-    while conn.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    assert_eq!(conn.state().await, ConnectionState::Established);
-    
-    // Send some data
-    let msg = Message::from_string("Test with properties")
-        .with_priority(50)
-        .safely_replayable();
-    conn.send(msg).await.unwrap();
-    
-    conn.close().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), test_body).await.unwrap();
 }
 
 #[tokio::test]
 async fn test_connection_with_local_endpoint() {
-    let server_addr = start_test_server("echo").await;
-    
-    let local = LocalEndpoint::builder()
-        .port(0) // Let system choose
-        .build();
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
-    
-    let preconn = new_preconnection(
-        vec![local],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let conn = preconn.initiate().await.unwrap();
-    
-    // Wait for establishment
-    while conn.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    // Check that local endpoint was populated
-    let local_ep = conn.local_endpoint().await;
-    assert!(local_ep.is_some());
-    
-    conn.close().await.unwrap();
+    let test_body = async {
+        let server_addr = start_test_server("echo").await;
+        
+        let local = LocalEndpoint::builder()
+            .port(0) // Let system choose
+            .build();
+        
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+        
+        let preconn = new_preconnection(
+            vec![local],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let conn = preconn.initiate().await.unwrap();
+        
+        // Wait for establishment
+        while conn.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        // Check that local endpoint was populated
+        let local_ep = conn.local_endpoint().await;
+        assert!(local_ep.is_some());
+        
+        conn.close().await.unwrap();
+    };
+
+    tokio::time::timeout(Duration::from_secs(10), test_body).await.unwrap();
 }
 
 #[tokio::test]
 async fn test_connection_clone_group() {
-    let server_addr = start_test_server("echo").await;
-    
-    let remote = RemoteEndpoint::builder()
-        .ip_address(server_addr.ip())
-        .port(server_addr.port())
-        .build();
-    
-    let preconn = new_preconnection(
-        vec![],
-        vec![remote],
-        TransportProperties::default(),
-        SecurityParameters::new_disabled(),
-    );
-    
-    let conn1 = preconn.initiate().await.unwrap();
-    
-    // Wait for establishment
-    while conn1.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    // Clone the connection (creates new connection in same group)
-    let conn2 = conn1.clone_connection().await.unwrap();
-    
-    // Wait for second connection to establish
-    while conn2.state().await == ConnectionState::Establishing {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    
-    assert_eq!(conn2.state().await, ConnectionState::Established);
-    
-    // Send on both connections
-    conn1.send(Message::from_string("From conn1")).await.unwrap();
-    conn2.send(Message::from_string("From conn2")).await.unwrap();
-    
-    // Close both
-    conn1.close().await.unwrap();
-    conn2.close().await.unwrap();
+    let test_body = async {
+        let server_addr = start_test_server("echo").await;
+        
+        let remote = RemoteEndpoint::builder()
+            .ip_address(server_addr.ip())
+            .port(server_addr.port())
+            .build();
+        
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let conn1 = preconn.initiate().await.unwrap();
+        
+        // Wait for establishment
+        while conn1.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        // Clone the connection (creates new connection in same group)
+        let conn2 = conn1.clone_connection().await.unwrap();
+        
+        // Wait for second connection to establish
+        while conn2.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        assert_eq!(conn2.state().await, ConnectionState::Established);
+        
+        // Send on both connections
+        conn1.send(Message::from_string("From conn1")).await.unwrap();
+        conn2.send(Message::from_string("From conn2")).await.unwrap();
+        
+        // Close both
+        conn1.close().await.unwrap();
+        conn2.close().await.unwrap();
+    };
+
+    tokio::time::timeout(Duration::from_secs(10), test_body).await.unwrap();
 }
 
 #[tokio::test]
@@ -354,7 +370,7 @@ async fn test_listener_accept_connection() {
     listener.stop().await.unwrap();
 }
 
-#[tokio::test] 
+#[tokio::test]
 async fn test_client_server_data_exchange() {
     // Create a listener
     let local = LocalEndpoint::builder()
@@ -723,4 +739,86 @@ async fn test_message_properties_integration() {
     }
     
     conn.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_full_send_receive_flow() {
+    let test_body = async {
+        // Start an echo server that understands length-prefix framing
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                // Simple length-prefix echo server
+                loop {
+                    let mut len_buf = [0u8; 4];
+                    match stream.read_exact(&mut len_buf).await {
+                        Ok(_) => {},
+                        Err(_) => break,
+                    }
+                    
+                    let len = u32::from_be_bytes(len_buf) as usize;
+                    let mut msg_buf = vec![0u8; len];
+                    match stream.read_exact(&mut msg_buf).await {
+                        Ok(_) => {},
+                        Err(_) => break,
+                    }
+                    
+                    // Echo back with length prefix
+                    if stream.write_all(&len_buf).await.is_err() {
+                        break;
+                    }
+                    if stream.write_all(&msg_buf).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // Create client connection
+        let remote = RemoteEndpoint::builder()
+            .socket_address(server_addr)
+            .build();
+        
+        let preconn = new_preconnection(
+            vec![],
+            vec![remote],
+            TransportProperties::default(),
+            SecurityParameters::new_disabled(),
+        );
+        
+        let conn = preconn.initiate().await.unwrap();
+        
+        // Wait for establishment
+        while conn.state().await == ConnectionState::Establishing {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        
+        // Consume Ready event
+        let _ = conn.next_event().await;
+        
+        // Set up length-prefix framer
+        conn.use_length_prefix_framer().await.unwrap();
+        
+        // Send a message - the framer will add length prefix
+        let send_msg = Message::from_string("Hello from TAPS!");
+        conn.send(send_msg.clone()).await.unwrap();
+        
+        // Wait for Sent event
+        let event = conn.next_event().await;
+        assert!(matches!(event, Some(ConnectionEvent::Sent { .. })));
+        
+        // Receive the echo - the framer will parse the length prefix
+        let (recv_msg, context) = conn.receive().await.unwrap();
+        
+        assert_eq!(recv_msg.data(), send_msg.data());
+        assert!(context.remote_endpoint.is_some());
+        
+        conn.close().await.unwrap();
+    };
+    
+    tokio::time::timeout(Duration::from_secs(10), test_body)
+        .await
+        .expect("Test timed out");
 }
