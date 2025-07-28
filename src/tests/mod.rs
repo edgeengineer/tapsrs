@@ -53,3 +53,6 @@ mod connection_termination_tests;
 
 #[cfg(test)]
 mod integration_tests;
+
+#[cfg(test)]
+mod background_reading_tests;

@@ -724,8 +724,8 @@ impl Connection {
                     self.send_message_internal(msg).await?;
                 }
                 
-                // TODO: Start background reading task (disabled for now to avoid deadlocks)
-                // self.start_reading_task().await?;
+                // Start background reading task
+                self.start_reading_task().await?;
                 
                 // Signal Ready event
                 let _ = self.event_sender.send(ConnectionEvent::Ready);
@@ -1155,8 +1155,8 @@ impl Connection {
         inner.state = ConnectionState::Established;
         drop(inner);
         
-        // TODO: Start background reading task (disabled for now to avoid deadlocks)
-        // let _ = self.start_reading_task().await;
+        // Start background reading task
+        let _ = self.start_reading_task().await;
         
         let _ = self.event_sender.send(ConnectionEvent::Ready);
     }
@@ -1221,6 +1221,135 @@ impl Connection {
             // On non-Unix platforms, return a typical default value
             Ok(1460)
         }
+    }
+    
+    /// Start a background task to continuously read from the connection
+    /// This enables passive message reception via events
+    async fn start_reading_task(&self) -> Result<()> {
+        // Clone necessary handles for the background task
+        let inner_clone = Arc::clone(&self.inner);
+        let event_sender = self.event_sender.clone();
+        
+        // Spawn the background reading task
+        tokio::spawn(async move {
+            let mut buffer = vec![0u8; 8192];
+            
+            loop {
+                // Check if connection is still active
+                let should_continue = {
+                    let inner = inner_clone.read().await;
+                    matches!(inner.state, ConnectionState::Established)
+                };
+                
+                if !should_continue {
+                    break;
+                }
+                
+                // Try to read data from the stream
+                let read_result = {
+                    let inner = inner_clone.read().await;
+                    if let Some(ref stream) = inner.tcp_stream {
+                        // Clone the stream handle for reading
+                        match stream.try_read(&mut buffer) {
+                            Ok(n) => Some(Ok(n)),
+                            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                // No data available, continue
+                                None
+                            }
+                            Err(e) => Some(Err(e)),
+                        }
+                    } else {
+                        break; // No stream available
+                    }
+                };
+                
+                match read_result {
+                    Some(Ok(0)) => {
+                        // Connection closed by peer
+                        let mut inner = inner_clone.write().await;
+                        inner.state = ConnectionState::Closed;
+                        let _ = event_sender.send(ConnectionEvent::Closed);
+                        break;
+                    }
+                    Some(Ok(n)) => {
+                        // Add data to receive buffer and try to parse messages
+                        let mut inner = inner_clone.write().await;
+                        inner.receive_buffer.extend_from_slice(&buffer[..n]);
+                        
+                        // Try to parse complete messages from the buffer
+                        loop {
+                            let message_result = if !inner.framers.is_empty() {
+                                // Use framer to parse messages
+                                if inner.receive_buffer.len() >= 4 {
+                                    let len_bytes = &inner.receive_buffer[0..4];
+                                    let expected_len = u32::from_be_bytes([
+                                        len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]
+                                    ]) as usize;
+                                    
+                                    if inner.receive_buffer.len() >= 4 + expected_len {
+                                        // We have a complete message
+                                        let message_data = inner.receive_buffer[4..4 + expected_len].to_vec();
+                                        inner.receive_buffer.drain(..4 + expected_len);
+                                        Some(Message::from_bytes(&message_data))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else if !inner.receive_buffer.is_empty() {
+                                // No framers - treat all data as one message
+                                let message_data = inner.receive_buffer.clone();
+                                inner.receive_buffer.clear();
+                                Some(Message::from_bytes(&message_data))
+                            } else {
+                                None
+                            };
+                            
+                            if let Some(message) = message_result {
+                                // Create message context
+                                let mut context = MessageContext::new();
+                                context.remote_endpoint = inner.remote_endpoint.clone();
+                                
+                                // Check if this is a final message
+                                if message.properties().final_message {
+                                    inner.final_message_received = true;
+                                }
+                                
+                                // Send Received event
+                                let _ = event_sender.send(ConnectionEvent::Received {
+                                    message_data: message.data().to_vec(),
+                                    message_context: context,
+                                });
+                            } else {
+                                break; // No more complete messages
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        let error_msg = e.to_string();
+                        let _ = event_sender.send(ConnectionEvent::ReceiveError {
+                            error: error_msg.clone(),
+                        });
+                        
+                        // Check if this is a fatal error
+                        if error_msg.contains("broken pipe") || 
+                           error_msg.contains("connection reset") {
+                            let mut inner = inner_clone.write().await;
+                            inner.state = ConnectionState::Closed;
+                            let _ = event_sender.send(ConnectionEvent::Closed);
+                            break;
+                        }
+                    }
+                    None => {
+                        // WouldBlock - yield to allow other tasks to run
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                }
+            }
+        });
+        
+        Ok(())
     }
 }
 

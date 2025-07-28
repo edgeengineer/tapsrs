@@ -251,12 +251,17 @@ async fn test_listener_multiple_connections() {
     let bound_addr = listener.local_addr().await.unwrap();
     
     // Spawn multiple clients
+    let mut client_handles = vec![];
     for i in 0..3 {
         let addr = bound_addr;
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             sleep(Duration::from_millis(10 * (i + 1) as u64)).await;
-            let _ = TcpStream::connect(addr).await;
+            let stream = TcpStream::connect(addr).await.unwrap();
+            // Keep the connection alive
+            sleep(Duration::from_secs(1)).await;
+            drop(stream);
         });
+        client_handles.push(handle);
     }
     
     // Accept all connections
@@ -276,6 +281,11 @@ async fn test_listener_multiple_connections() {
     }
     
     listener.stop().await.unwrap();
+    
+    // Wait for client tasks to complete
+    for handle in client_handles {
+        let _ = handle.await;
+    }
 }
 
 #[tokio::test]

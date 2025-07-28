@@ -178,3 +178,26 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [ ] An Android Archive (AAR) that includes the `.so` files for different Android ABIs.
     - [ ] A NuGet package for Windows developers.
 - [ ] Provide comprehensive documentation and examples for using the library on each target platform.
+- [ ] **FFI Async/Await Integration Assessment and Improvements**:
+    - [ ] **Current FFI Status**: The existing C-FFI is **~80% sufficient** for building ergonomic Swift and C# async/await APIs
+    - [ ] **What Works Well**:
+        - [ ] Callback-based operations (e.g., `transport_services_connection_send`) with user_data context - ideal for async/await bridging
+        - [ ] Connection initiation with both success and error callbacks
+        - [ ] Event polling system that can be wrapped in async streams
+        - [ ] Comprehensive error codes and message handling
+    - [ ] **Critical Missing Pieces**:
+        - [ ] **Add async receive operations**: Implement `transport_services_connection_receive(handle, message_callback, error_callback, user_data)` 
+        - [ ] **Add listener connection callbacks**: Implement `transport_services_listener_set_connection_callback()` for asynchronous new connection notifications
+        - [ ] **Convert sync-only operations**: Make `transport_services_connection_close()` callback-based for proper async handling
+    - [ ] **FFI Runtime Optimizations** (Optional but Recommended):
+        - [ ] Replace per-call `tokio::runtime::Runtime::new()` with single shared runtime using `lazy_static` or `std::sync::OnceLock`
+        - [ ] Replace `std::thread::spawn` + `block_on` pattern with proper future handling
+        - [ ] Add cancellation token support for long-running operations
+    - [ ] **Language-Specific Wrapper Implementation**:
+        - [ ] **Swift Integration**: Use `withCheckedThrowingContinuation` to bridge C callbacks to Swift async/await
+        - [ ] **C# Integration**: Use `TaskCompletionSource<T>` and `GCHandle` to bridge C callbacks to C# async/await  
+        - [ ] Both languages can cleanly wrap the callback + user_data pattern into native async/await APIs
+    - [ ] **Alternative Architecture** (Future Consideration):
+        - [ ] Consider future-based FFI layer that returns opaque future handles instead of callbacks
+        - [ ] Implement `transport_services_future_await()` for direct async integration
+        - [ ] Add stream-based event handling for real-time event consumption
