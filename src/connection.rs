@@ -5,7 +5,7 @@ use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
     TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
     EndpointIdentifier, ConnectionGroup, ConnectionGroupId, FramerStack,
-    ConnectionProperties, ConnectionProperty, TimeoutValue,
+    ConnectionProperties, ConnectionProperty, TimeoutValue, CommunicationDirection,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -50,6 +50,10 @@ pub(crate) struct ConnectionInner {
     receive_buffer: Vec<u8>,
     // Connection properties
     properties: ConnectionProperties,
+    // Track if a Final message was sent
+    final_message_sent: bool,
+    // Track if a Final message was received
+    final_message_received: bool,
 }
 
 impl Clone for Connection {
@@ -92,6 +96,8 @@ impl Connection {
                 framers: FramerStack::new(), // Will be populated from preconnection async
                 receive_buffer: Vec::new(),
                 properties: ConnectionProperties::new(),
+                final_message_sent: false,
+                final_message_received: false,
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -154,6 +160,11 @@ impl Connection {
     /// Internal method to actually send a message
     async fn send_message_internal(&self, message: Message) -> Result<()> {
         let mut inner = self.inner.write().await;
+        
+        // Check if this is a Final message
+        if message.properties().final_message {
+            inner.final_message_sent = true;
+        }
         
         // Frame the message if framers are available
         let data_to_send = if !inner.framers.is_empty() {
@@ -823,31 +834,87 @@ impl Connection {
         let inner = self.inner.read().await;
         let mut props = inner.properties.clone();
         
-        // Update read-only properties based on current state
+        // Get the transport properties to check direction
+        let direction = inner.transport_properties.selection_properties.direction;
+        
+        // RFC 8.1.11.2: Can Send Data
+        // Check against direction Selection Property and Final message state
         let can_send = match inner.state {
-            ConnectionState::Established => true,
+            ConnectionState::Established => {
+                // Can't send if:
+                // 1. Direction is unidirectional receive, or
+                // 2. A Final message was already sent
+                match direction {
+                    CommunicationDirection::UnidirectionalReceive => false,
+                    _ => !inner.final_message_sent,
+                }
+            }
             ConnectionState::Establishing => false, // Could buffer, but say false for now
             _ => false,
         };
         
+        // RFC 8.1.11.3: Can Receive Data
+        // Check against direction Selection Property and Final message state
         let can_receive = match inner.state {
-            ConnectionState::Established => true,
+            ConnectionState::Established => {
+                // Can't receive if:
+                // 1. Direction is unidirectional send, or
+                // 2. A Final message was already received (implementation specific)
+                match direction {
+                    CommunicationDirection::UnidirectionalSend => false,
+                    _ => !inner.final_message_received,
+                }
+            }
             _ => false,
         };
         
+        // Update the basic read-only properties
         props.update_readonly(inner.state, can_send, can_receive);
         
         // Update MTU-related properties if we have a TCP stream
         if let Some(ref stream) = inner.tcp_stream {
+            // RFC 8.1.11.4: Maximum Message Size Before Fragmentation
             // Query actual MSS from socket
             let mss = self.get_tcp_mss(stream).await.unwrap_or(1460); // Default to typical value if query fails
             
             props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
                 ConnectionProperty::SingularTransmissionMsgMaxLen(Some(mss)));
+            
+            // RFC 8.1.11.5: Maximum Message Size on Send
+            // For TCP, there's no inherent limit (streaming protocol)
+            // Return 0 if sending is not possible
+            let send_msg_max = if can_send {
+                None // No limit for TCP
+            } else {
+                Some(0) // Cannot send
+            };
             props.properties.insert("sendMsgMaxLen".to_string(),
-                ConnectionProperty::SendMsgMaxLen(None)); // No limit for TCP
+                ConnectionProperty::SendMsgMaxLen(send_msg_max));
+            
+            // RFC 8.1.11.6: Maximum Message Size on Receive  
+            // For TCP, there's no inherent limit (streaming protocol)
+            // Return 0 if receiving is not possible
+            let recv_msg_max = if can_receive {
+                None // No limit for TCP
+            } else {
+                Some(0) // Cannot receive
+            };
             props.properties.insert("recvMsgMaxLen".to_string(),
-                ConnectionProperty::RecvMsgMaxLen(None)); // No limit for TCP
+                ConnectionProperty::RecvMsgMaxLen(recv_msg_max));
+        } else {
+            // No stream - set appropriate values based on connection state
+            if inner.state == ConnectionState::Establishing {
+                // Don't add properties for connections that haven't been established yet
+                // This matches the expectation of test_mss_property_not_set_before_connection
+            } else {
+                // For closed connections or other states, add properties with 0 values
+                props.properties.insert("singularTransmissionMsgMaxLen".to_string(),
+                    ConnectionProperty::SingularTransmissionMsgMaxLen(None)); // Not applicable
+                props.properties.insert("sendMsgMaxLen".to_string(),
+                    ConnectionProperty::SendMsgMaxLen(Some(0))); // Cannot send without stream
+                props.properties.insert("recvMsgMaxLen".to_string(),
+                    ConnectionProperty::RecvMsgMaxLen(Some(0))); // Cannot receive without stream
+            }
         }
         
         props

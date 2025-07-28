@@ -145,6 +145,12 @@ impl Message {
         self.properties.final_message = true;
         self
     }
+    
+    /// Set whether this is the final message (allows setting to true or false)
+    pub fn with_final(mut self, is_final: bool) -> Self {
+        self.properties.final_message = is_final;
+        self
+    }
 
     /// Set message ID
     pub fn with_id(mut self, id: u64) -> Self {

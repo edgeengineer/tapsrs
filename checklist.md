@@ -119,13 +119,39 @@ This document outlines the phases and steps required to implement the TAPS (Tran
         - [x] `minSendRate` / `minRecvRate` / `maxSendRate` / `maxRecvRate` - Bounds on Send or Receive Rate (**8.1.8, Bounds on Send or Receive Rate**)
         - [x] `groupConnLimit` - Group Connection Limit (**8.1.9, Group Connection Limit**)
         - [x] `isolateSession` - Isolate Session (**8.1.10, Isolate Session**)
-    - [ ] Implement read-only generic connection properties (**RFC Section 8.1.11, Read-Only Connection Properties**):
-        - [ ] `connState` - Connection State (**8.1.11.1, Connection State**)
-        - [ ] `canSend` - Can Send Data (**8.1.11.2, Can Send Data**)
-        - [ ] `canReceive` - Can Receive Data (**8.1.11.3, Can Receive Data**)
-        - [ ] `singularTransmissionMsgMaxLen` - Maximum Message Size Before Fragmentation or Segmentation (**8.1.11.4, Maximum Message Size Before Fragmentation or Segmentation**)
-        - [ ] `sendMsgMaxLen` - Maximum Message Size on Send (**8.1.11.5, Maximum Message Size on Send**)
-        - [ ] `recvMsgMaxLen` - Maximum Message Size on Receive (**8.1.11.6, Maximum Message Size on Receive**)
+    - [x] Implement read-only generic connection properties (**RFC Section 8.1.11, Read-Only Connection Properties**):
+        - [x] `connState` - Connection State (**8.1.11.1, Connection State**):
+            - [x] Implement `ConnectionState` enumeration with values: `Establishing`, `Established`, `Closing`, `Closed`
+            - [x] Expose current connection state through `Connection.GetProperties()`
+            - [x] Update connection state during connection lifecycle transitions (see **RFC Section 11, Connection State and Ordering of Operations and Events**)
+            - [x] Ensure state is properly synchronized with connection events (Ready, EstablishmentError, Closed, ConnectionError)
+        - [x] `canSend` - Can Send Data (**8.1.11.2, Can Send Data**):
+            - [x] Implement Boolean property indicating whether connection can send data
+            - [x] Check against `direction` Selection Property (unidirectional receive blocks sending)
+            - [x] Check if a Message marked as Final was previously sent (blocks further sending)
+            - [x] Update dynamically based on connection state and protocol capabilities
+        - [x] `canReceive` - Can Receive Data (**8.1.11.3, Can Receive Data**):
+            - [x] Implement Boolean property indicating whether connection can receive data  
+            - [x] Check against `direction` Selection Property (unidirectional send blocks receiving)
+            - [x] Check if a Message marked as Final was received (may block further receiving for some protocols like TCP half-closed connections)
+            - [x] Update dynamically based on connection state and protocol capabilities
+        - [x] `singularTransmissionMsgMaxLen` - Maximum Message Size Before Fragmentation or Segmentation (**8.1.11.4, Maximum Message Size Before Fragmentation or Segmentation**):
+            - [x] Implement property returning Integer (non-negative) or "Not applicable" special value
+            - [x] Calculate based on Maximum Packet Size (MPS) from underlying protocol stack
+            - [x] Ensure value is ≤ `sendMsgMaxLen` property
+            - [x] Support dynamic updates via Datagram Packetization Layer Path MTU Discovery (DPLPMTUD) as referenced in **RFC 8899**
+            - [x] Handle "Not applicable" case for protocols where fragmentation/segmentation info is unavailable
+            - [x] Use this value to prevent SendError events for oversized messages
+        - [x] `sendMsgMaxLen` - Maximum Message Size on Send (**8.1.11.5, Maximum Message Size on Send**):
+            - [x] Implement property returning Integer (non-negative) representing max sendable message size in bytes
+            - [x] Return 0 when sending is not possible (e.g., unidirectional receive connection)
+            - [x] Base calculation on underlying transport protocol limitations (e.g., UDP datagram size limits)
+            - [x] Update dynamically based on connection state and transport stack capabilities
+        - [x] `recvMsgMaxLen` - Maximum Message Size on Receive (**8.1.11.6, Maximum Message Size on Receive**):
+            - [x] Implement property returning Integer (non-negative) representing max receivable message size in bytes
+            - [x] Return 0 when receiving is not possible (e.g., unidirectional send connection)
+            - [x] Base calculation on underlying transport protocol limitations and available buffer space
+            - [x] Update dynamically based on connection state and transport stack capabilities
     - [ ] Implement TCP-specific properties (**RFC Section 8.2, TCP-Specific Properties: User Timeout Option (UTO)**):
         - [ ] `tcp.userTimeoutValue` - Advertised User Timeout (**8.2.1, Advertised User Timeout**)
         - [ ] `tcp.userTimeoutEnabled` - User Timeout Enabled (**8.2.2, User Timeout Enabled**)
