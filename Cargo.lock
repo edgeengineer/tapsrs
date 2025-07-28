@@ -1960,23 +1960,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "taps"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "env_logger",
- "futures",
- "log",
- "quinn",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-test",
- "webrtc",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2161,6 +2144,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "transport_services"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "env_logger",
+ "futures",
+ "log",
+ "quinn",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-test",
+ "webrtc",
 ]
 
 [[package]]

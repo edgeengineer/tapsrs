@@ -1,10 +1,10 @@
-# TAPS Rust Implementation Checklist
+# Transport Services Rust Implementation Checklist
 
-This document outlines the phases and steps required to implement the TAPS (Transport Services) API in a Rust crate named `TAPS`, as specified in RFC 9622. The primary goal is to produce a static library compatible with iOS, macOS, Linux, Android, and Windows, using Tokio for asynchronous operations.
+This document outlines the phases and steps required to implement the TAPS (Transport Services) API in a Rust crate named `TransportServices`, as specified in RFC 9622. The primary goal is to produce a static library compatible with iOS, macOS, Linux, Android, and Windows, using Tokio for asynchronous operations.
 
 ## Phase 0: Project Setup & Core Abstractions
 
-- [ ] Initialize a new Rust library crate named `TAPS`.
+- [ ] Initialize a new Rust library crate named `TransportServices`.
 - [ ] Define core data structures based on **RFC Section 1.1 (Terminology and Notation)** (e.g., custom types for `Preference`, `EndpointIdentifier`, etc.).
 - [ ] Define the primary public objects as Rust structs (**RFC Section 3, API Summary**): `Preconnection`, `Connection`, `Listener`, `Message`, `MessageContext`.
 - [ ] Set up cross-compilation toolchains and targets in `rustup`:
@@ -125,8 +125,8 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 ## Phase 5: Packaging and Distribution
 
 - [ ] Create build scripts (e.g., `build.rs` or shell scripts) to automate the cross-compilation for all target platforms.
-- [ ] Automate the generation of static libraries (`libTAPS.a`, `TAPS.lib`) for each target architecture.
-- [ ] Use `cbindgen` to automatically generate a C header file (`taps.h`) from the FFI layer.
+- [ ] Automate the generation of static libraries (`libtransport_services.a`, `transport_services.lib`) for each target architecture.
+- [ ] Use `cbindgen` to automatically generate a C header file (`transport_services.h`) from the FFI layer.
 - [ ] Create wrapper packages for easy integration into platform-native projects:
     - [ ] A Swift Package that bundles the `.a` and `.h` files for iOS and macOS.
     - [ ] An Android Archive (AAR) that includes the `.so` files for different Android ABIs.

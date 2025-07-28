@@ -1,9 +1,9 @@
-//! Preconnection implementation for TAPS
+//! Preconnection implementation for Transport Services
 //! Based on RFC 9622 Section 6 (Preestablishment Phase)
 
 use crate::{
     LocalEndpoint, RemoteEndpoint, TransportProperties, SecurityParameters,
-    Connection, Listener, Result, TapsError
+    Connection, Listener, Result, TransportServicesError
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -92,7 +92,7 @@ impl Preconnection {
         
         // Validate that we have at least one remote endpoint
         if inner.remote_endpoints.is_empty() {
-            return Err(TapsError::InvalidParameters(
+            return Err(TransportServicesError::InvalidParameters(
                 "No remote endpoints specified for initiate".to_string()
             ));
         }
@@ -112,7 +112,7 @@ impl Preconnection {
         
         // Validate that we have at least one local endpoint
         if inner.local_endpoints.is_empty() {
-            return Err(TapsError::InvalidParameters(
+            return Err(TransportServicesError::InvalidParameters(
                 "No local endpoints specified for listen".to_string()
             ));
         }
@@ -129,12 +129,12 @@ impl Preconnection {
         
         // Validate that we have both local and remote endpoints
         if inner.local_endpoints.is_empty() {
-            return Err(TapsError::InvalidParameters(
+            return Err(TransportServicesError::InvalidParameters(
                 "No local endpoints specified for rendezvous".to_string()
             ));
         }
         if inner.remote_endpoints.is_empty() {
-            return Err(TapsError::InvalidParameters(
+            return Err(TransportServicesError::InvalidParameters(
                 "No remote endpoints specified for rendezvous".to_string()
             ));
         }

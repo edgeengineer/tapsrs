@@ -1,14 +1,14 @@
 [package]
-name = "taps"
+name = "transport_services"
 version = "0.1.0"
 edition = "2021"
-authors = ["TAPS Contributors"]
-description = "Transport Services (TAPS) - RFC 9622 implementation"
-repository = "https://github.com/yourusername/taps-rs"
+authors = ["Transport Services Contributors"]
+description = "Transport Services - RFC 9622 implementation"
+repository = "https://github.com/yourusername/transport-services-rs"
 license = "MIT OR Apache-2.0"
 
 [lib]
-name = "taps"
+name = "transport_services"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]

@@ -1,9 +1,9 @@
-//! Connection implementation for TAPS
+//! Connection implementation for Transport Services
 //! Based on RFC 9622 Section 3 (API Summary) and Section 8 (Managing Connections)
 
 use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
-    TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TapsError
+    TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
@@ -63,7 +63,7 @@ impl Connection {
                 // TODO: Implement message queueing
                 Ok(())
             }
-            _ => Err(TapsError::InvalidState(
+            _ => Err(TransportServicesError::InvalidState(
                 "Cannot send on a closed connection".to_string()
             )),
         }
@@ -77,9 +77,9 @@ impl Connection {
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 // TODO: Implement actual message receiving
-                Err(TapsError::NotSupported("Receive not yet implemented".to_string()))
+                Err(TransportServicesError::NotSupported("Receive not yet implemented".to_string()))
             }
-            _ => Err(TapsError::InvalidState(
+            _ => Err(TransportServicesError::InvalidState(
                 "Cannot receive on a closed connection".to_string()
             )),
         }
@@ -121,7 +121,7 @@ impl Connection {
                 // Create a new connection using the same preconnection
                 inner.preconnection.initiate().await
             }
-            _ => Err(TapsError::InvalidState(
+            _ => Err(TransportServicesError::InvalidState(
                 "Can only clone established connections".to_string()
             )),
         }
@@ -137,7 +137,7 @@ impl Connection {
                 // TODO: Implement adding remote endpoints to active connection
                 Ok(())
             }
-            _ => Err(TapsError::InvalidState(
+            _ => Err(TransportServicesError::InvalidState(
                 "Cannot add endpoints to a closed connection".to_string()
             )),
         }
@@ -152,7 +152,7 @@ impl Connection {
                 // TODO: Implement adding local endpoints to active connection
                 Ok(())
             }
-            _ => Err(TapsError::InvalidState(
+            _ => Err(TransportServicesError::InvalidState(
                 "Cannot add endpoints to a closed connection".to_string()
             )),
         }

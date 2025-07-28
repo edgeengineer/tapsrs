@@ -7,7 +7,7 @@ use std::os::raw::c_char;
 
 /// Create a new preconnection
 #[no_mangle]
-pub extern "C" fn taps_preconnection_new() -> *mut TapsHandle {
+pub extern "C" fn transport_services_preconnection_new() -> *mut TransportServicesHandle {
     let preconn = Preconnection::new(
         vec![],
         vec![],
@@ -19,12 +19,12 @@ pub extern "C" fn taps_preconnection_new() -> *mut TapsHandle {
 
 /// Add a local endpoint to the preconnection
 #[no_mangle]
-pub unsafe extern "C" fn taps_preconnection_add_local_endpoint(
-    handle: *mut TapsHandle,
-    endpoint: *const types::TapsEndpoint,
-) -> types::TapsError {
+pub unsafe extern "C" fn transport_services_preconnection_add_local_endpoint(
+    handle: *mut TransportServicesHandle,
+    endpoint: *const types::TransportServicesEndpoint,
+) -> types::TransportServicesError {
     if handle.is_null() || endpoint.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let preconn = handle_mut::<Preconnection>(handle);
@@ -55,17 +55,17 @@ pub unsafe extern "C" fn taps_preconnection_add_local_endpoint(
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(preconn.add_local(local));
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Add a remote endpoint to the preconnection
 #[no_mangle]
-pub unsafe extern "C" fn taps_preconnection_add_remote_endpoint(
-    handle: *mut TapsHandle,
-    endpoint: *const types::TapsEndpoint,
-) -> types::TapsError {
+pub unsafe extern "C" fn transport_services_preconnection_add_remote_endpoint(
+    handle: *mut TransportServicesHandle,
+    endpoint: *const types::TransportServicesEndpoint,
+) -> types::TransportServicesError {
     if handle.is_null() || endpoint.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let preconn = handle_mut::<Preconnection>(handle);
@@ -96,17 +96,17 @@ pub unsafe extern "C" fn taps_preconnection_add_remote_endpoint(
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(preconn.add_remote(remote));
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Set transport properties on the preconnection
 #[no_mangle]
-pub unsafe extern "C" fn taps_preconnection_set_transport_properties(
-    handle: *mut TapsHandle,
-    properties: *const types::TapsTransportProperties,
-) -> types::TapsError {
+pub unsafe extern "C" fn transport_services_preconnection_set_transport_properties(
+    handle: *mut TransportServicesHandle,
+    properties: *const types::TransportServicesTransportProperties,
+) -> types::TransportServicesError {
     if handle.is_null() || properties.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let preconn = handle_mut::<Preconnection>(handle);
@@ -122,19 +122,19 @@ pub unsafe extern "C" fn taps_preconnection_set_transport_properties(
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(preconn.set_transport_properties(transport_props));
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Initiate a connection
 #[no_mangle]
-pub unsafe extern "C" fn taps_preconnection_initiate(
-    handle: *mut TapsHandle,
-    callback: types::TapsConnectionCallback,
-    error_callback: types::TapsErrorCallback,
+pub unsafe extern "C" fn transport_services_preconnection_initiate(
+    handle: *mut TransportServicesHandle,
+    callback: types::TransportServicesConnectionCallback,
+    error_callback: types::TransportServicesErrorCallback,
     user_data: *mut c_void,
-) -> types::TapsError {
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let preconn = handle_ref::<Preconnection>(handle);
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn taps_preconnection_initiate(
                     callback(conn_handle, user_data);
                 }
                 Err(e) => {
-                    let error_code = types::TapsError::from(e);
+                    let error_code = types::TransportServicesError::from(e);
                     let msg = CString::new("Connection initiation failed").unwrap();
                     error_callback(error_code, msg.as_ptr(), user_data);
                 }
@@ -160,12 +160,12 @@ pub unsafe extern "C" fn taps_preconnection_initiate(
         });
     });
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Free a preconnection handle
 #[no_mangle]
-pub unsafe extern "C" fn taps_preconnection_free(handle: *mut TapsHandle) {
+pub unsafe extern "C" fn transport_services_preconnection_free(handle: *mut TransportServicesHandle) {
     if !handle.is_null() {
         let _ = from_handle::<Preconnection>(handle);
     }

@@ -5,7 +5,7 @@ use std::os::raw::{c_char, c_int, c_void};
 /// FFI representation of Preference
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub enum TapsPreference {
+pub enum TransportServicesPreference {
     Require = 0,
     Prefer = 1,
     NoPreference = 2,
@@ -13,33 +13,33 @@ pub enum TapsPreference {
     Prohibit = 4,
 }
 
-impl From<crate::Preference> for TapsPreference {
+impl From<crate::Preference> for TransportServicesPreference {
     fn from(pref: crate::Preference) -> Self {
         match pref {
-            crate::Preference::Require => TapsPreference::Require,
-            crate::Preference::Prefer => TapsPreference::Prefer,
-            crate::Preference::NoPreference => TapsPreference::NoPreference,
-            crate::Preference::Avoid => TapsPreference::Avoid,
-            crate::Preference::Prohibit => TapsPreference::Prohibit,
+            crate::Preference::Require => TransportServicesPreference::Require,
+            crate::Preference::Prefer => TransportServicesPreference::Prefer,
+            crate::Preference::NoPreference => TransportServicesPreference::NoPreference,
+            crate::Preference::Avoid => TransportServicesPreference::Avoid,
+            crate::Preference::Prohibit => TransportServicesPreference::Prohibit,
         }
     }
 }
 
-impl From<TapsPreference> for crate::Preference {
-    fn from(pref: TapsPreference) -> Self {
+impl From<TransportServicesPreference> for crate::Preference {
+    fn from(pref: TransportServicesPreference) -> Self {
         match pref {
-            TapsPreference::Require => crate::Preference::Require,
-            TapsPreference::Prefer => crate::Preference::Prefer,
-            TapsPreference::NoPreference => crate::Preference::NoPreference,
-            TapsPreference::Avoid => crate::Preference::Avoid,
-            TapsPreference::Prohibit => crate::Preference::Prohibit,
+            TransportServicesPreference::Require => crate::Preference::Require,
+            TransportServicesPreference::Prefer => crate::Preference::Prefer,
+            TransportServicesPreference::NoPreference => crate::Preference::NoPreference,
+            TransportServicesPreference::Avoid => crate::Preference::Avoid,
+            TransportServicesPreference::Prohibit => crate::Preference::Prohibit,
         }
     }
 }
 
 /// FFI representation of endpoint
 #[repr(C)]
-pub struct TapsEndpoint {
+pub struct TransportServicesEndpoint {
     pub hostname: *const c_char,
     pub port: u16,
     pub service: *const c_char,
@@ -48,17 +48,17 @@ pub struct TapsEndpoint {
 
 /// FFI representation of transport properties
 #[repr(C)]
-pub struct TapsTransportProperties {
-    pub reliability: TapsPreference,
-    pub preserve_msg_boundaries: TapsPreference,
-    pub preserve_order: TapsPreference,
-    pub congestion_control: TapsPreference,
+pub struct TransportServicesTransportProperties {
+    pub reliability: TransportServicesPreference,
+    pub preserve_msg_boundaries: TransportServicesPreference,
+    pub preserve_order: TransportServicesPreference,
+    pub congestion_control: TransportServicesPreference,
     pub multipath: c_int,
 }
 
 /// FFI representation of security parameters
 #[repr(C)]
-pub struct TapsSecurityParameters {
+pub struct TransportServicesSecurityParameters {
     pub disabled: bool,
     pub opportunistic: bool,
     pub server_certificate: *const c_void,
@@ -67,7 +67,7 @@ pub struct TapsSecurityParameters {
 
 /// FFI representation of message
 #[repr(C)]
-pub struct TapsMessage {
+pub struct TransportServicesMessage {
     pub data: *const u8,
     pub length: usize,
     pub lifetime_ms: u64,
@@ -79,20 +79,20 @@ pub struct TapsMessage {
 /// Connection state for FFI
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub enum TapsConnectionState {
+pub enum TransportServicesConnectionState {
     Establishing = 0,
     Established = 1,
     Closing = 2,
     Closed = 3,
 }
 
-impl From<crate::ConnectionState> for TapsConnectionState {
+impl From<crate::ConnectionState> for TransportServicesConnectionState {
     fn from(state: crate::ConnectionState) -> Self {
         match state {
-            crate::ConnectionState::Establishing => TapsConnectionState::Establishing,
-            crate::ConnectionState::Established => TapsConnectionState::Established,
-            crate::ConnectionState::Closing => TapsConnectionState::Closing,
-            crate::ConnectionState::Closed => TapsConnectionState::Closed,
+            crate::ConnectionState::Establishing => TransportServicesConnectionState::Establishing,
+            crate::ConnectionState::Established => TransportServicesConnectionState::Established,
+            crate::ConnectionState::Closing => TransportServicesConnectionState::Closing,
+            crate::ConnectionState::Closed => TransportServicesConnectionState::Closed,
         }
     }
 }
@@ -100,7 +100,7 @@ impl From<crate::ConnectionState> for TapsConnectionState {
 /// Error codes for FFI
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub enum TapsError {
+pub enum TransportServicesError {
     Success = 0,
     InvalidParameters = -1,
     EstablishmentFailed = -2,
@@ -115,25 +115,25 @@ pub enum TapsError {
     Unknown = -99,
 }
 
-impl From<crate::TapsError> for TapsError {
-    fn from(err: crate::TapsError) -> Self {
+impl From<crate::TransportServicesError> for TransportServicesError {
+    fn from(err: crate::TransportServicesError) -> Self {
         match err {
-            crate::TapsError::InvalidParameters(_) => TapsError::InvalidParameters,
-            crate::TapsError::EstablishmentFailed(_) => TapsError::EstablishmentFailed,
-            crate::TapsError::ConnectionFailed(_) => TapsError::ConnectionFailed,
-            crate::TapsError::SendFailed(_) => TapsError::SendFailed,
-            crate::TapsError::ReceiveFailed(_) => TapsError::ReceiveFailed,
-            crate::TapsError::NotSupported(_) => TapsError::NotSupported,
-            crate::TapsError::Timeout => TapsError::Timeout,
-            crate::TapsError::InvalidState(_) => TapsError::InvalidState,
-            crate::TapsError::SecurityError(_) => TapsError::SecurityError,
-            crate::TapsError::Io(_) => TapsError::IoError,
-            _ => TapsError::Unknown,
+            crate::TransportServicesError::InvalidParameters(_) => TransportServicesError::InvalidParameters,
+            crate::TransportServicesError::EstablishmentFailed(_) => TransportServicesError::EstablishmentFailed,
+            crate::TransportServicesError::ConnectionFailed(_) => TransportServicesError::ConnectionFailed,
+            crate::TransportServicesError::SendFailed(_) => TransportServicesError::SendFailed,
+            crate::TransportServicesError::ReceiveFailed(_) => TransportServicesError::ReceiveFailed,
+            crate::TransportServicesError::NotSupported(_) => TransportServicesError::NotSupported,
+            crate::TransportServicesError::Timeout => TransportServicesError::Timeout,
+            crate::TransportServicesError::InvalidState(_) => TransportServicesError::InvalidState,
+            crate::TransportServicesError::SecurityError(_) => TransportServicesError::SecurityError,
+            crate::TransportServicesError::Io(_) => TransportServicesError::IoError,
+            _ => TransportServicesError::Unknown,
         }
     }
 }
 
 /// Callback function types
-pub type TapsConnectionCallback = extern "C" fn(connection: *mut super::TapsHandle, user_data: *mut c_void);
-pub type TapsErrorCallback = extern "C" fn(error: TapsError, message: *const c_char, user_data: *mut c_void);
-pub type TapsMessageCallback = extern "C" fn(message: *const TapsMessage, user_data: *mut c_void);
+pub type TransportServicesConnectionCallback = extern "C" fn(connection: *mut super::TransportServicesHandle, user_data: *mut c_void);
+pub type TransportServicesErrorCallback = extern "C" fn(error: TransportServicesError, message: *const c_char, user_data: *mut c_void);
+pub type TransportServicesMessageCallback = extern "C" fn(message: *const TransportServicesMessage, user_data: *mut c_void);

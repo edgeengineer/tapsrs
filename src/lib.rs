@@ -1,4 +1,4 @@
-//! TAPS (Transport Services) - A Rust implementation of RFC 9622
+//! Transport Services - A Rust implementation of RFC 9622
 //! 
 //! This library provides an abstract API for transport protocols that enables
 //! the selection of transport protocols and network paths dynamically at runtime.
@@ -18,4 +18,4 @@ pub use preconnection::Preconnection;
 pub use connection::Connection;
 pub use listener::Listener;
 pub use message::{Message, MessageContext};
-pub use error::{TapsError, Result};
+pub use error::{TransportServicesError, Result};

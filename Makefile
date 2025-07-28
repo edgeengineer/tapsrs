@@ -1,4 +1,4 @@
-# Makefile for building TAPS library for multiple platforms
+# Makefile for building Transport Services library for multiple platforms
 
 .PHONY: all clean test build-all ios android linux windows macos
 
@@ -17,9 +17,9 @@ macos:
 	@echo "Creating universal macOS library..."
 	@mkdir -p target/universal-macos/release
 	lipo -create \
-		target/aarch64-apple-darwin/release/libtaps.a \
-		target/x86_64-apple-darwin/release/libtaps.a \
-		-output target/universal-macos/release/libtaps.a
+		target/aarch64-apple-darwin/release/libtransport_services.a \
+		target/x86_64-apple-darwin/release/libtransport_services.a \
+		-output target/universal-macos/release/libtransport_services.a
 
 # iOS
 ios:
@@ -54,7 +54,7 @@ ffi:
 headers:
 	@echo "Generating C headers..."
 	cargo build --features ffi
-	cbindgen --config cbindgen.toml --crate taps --output taps.h
+	cbindgen --config cbindgen.toml --crate transport_services --output transport_services.h
 
 # Run tests
 test:
@@ -71,7 +71,7 @@ fmt:
 # Clean build artifacts
 clean:
 	cargo clean
-	rm -f taps.h
+	rm -f transport_services.h
 
 # Build documentation
 doc:

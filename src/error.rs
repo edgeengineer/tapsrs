@@ -1,15 +1,15 @@
-//! Error types for TAPS
+//! Error types for Transport Services
 
 use std::fmt;
 use std::error::Error;
 use std::io;
 
-/// Result type alias for TAPS operations
-pub type Result<T> = std::result::Result<T, TapsError>;
+/// Result type alias for Transport Services operations
+pub type Result<T> = std::result::Result<T, TransportServicesError>;
 
-/// Main error type for TAPS operations
+/// Main error type for Transport Services operations
 #[derive(Debug)]
-pub enum TapsError {
+pub enum TransportServicesError {
     /// Connection establishment failed (RFC 7.1, 7.2, 7.3).
     /// Corresponds to the `EstablishmentError` event.
     EstablishmentFailed(String),
@@ -53,36 +53,36 @@ pub enum TapsError {
     Timeout,
 }
 
-impl fmt::Display for TapsError {
+impl fmt::Display for TransportServicesError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapsError::EstablishmentFailed(msg) => write!(f, "Connection establishment failed: {}", msg),
-            TapsError::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
-            TapsError::SendFailed(msg) => write!(f, "Send failed: {}", msg),
-            TapsError::ReceiveFailed(msg) => write!(f, "Receive failed: {}", msg),
-            TapsError::CloneFailed(msg) => write!(f, "Clone failed: {}", msg),
-            TapsError::MessageExpired => write!(f, "Message expired before sending"),
-            TapsError::InvalidParameters(msg) => write!(f, "Invalid parameters: {}", msg),
-            TapsError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
-            TapsError::SecurityError(msg) => write!(f, "Security error: {}", msg),
-            TapsError::Io(err) => write!(f, "I/O error: {}", err),
-            TapsError::NotSupported(msg) => write!(f, "Operation not supported: {}", msg),
-            TapsError::Timeout => write!(f, "Operation timed out"),
+            TransportServicesError::EstablishmentFailed(msg) => write!(f, "Connection establishment failed: {}", msg),
+            TransportServicesError::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
+            TransportServicesError::SendFailed(msg) => write!(f, "Send failed: {}", msg),
+            TransportServicesError::ReceiveFailed(msg) => write!(f, "Receive failed: {}", msg),
+            TransportServicesError::CloneFailed(msg) => write!(f, "Clone failed: {}", msg),
+            TransportServicesError::MessageExpired => write!(f, "Message expired before sending"),
+            TransportServicesError::InvalidParameters(msg) => write!(f, "Invalid parameters: {}", msg),
+            TransportServicesError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
+            TransportServicesError::SecurityError(msg) => write!(f, "Security error: {}", msg),
+            TransportServicesError::Io(err) => write!(f, "I/O error: {}", err),
+            TransportServicesError::NotSupported(msg) => write!(f, "Operation not supported: {}", msg),
+            TransportServicesError::Timeout => write!(f, "Operation timed out"),
         }
     }
 }
 
-impl Error for TapsError {
+impl Error for TransportServicesError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            TapsError::Io(err) => Some(err),
+            TransportServicesError::Io(err) => Some(err),
             _ => None,
         }
     }
 }
 
-impl From<io::Error> for TapsError {
+impl From<io::Error> for TransportServicesError {
     fn from(err: io::Error) -> Self {
-        TapsError::Io(err)
+        TransportServicesError::Io(err)
     }
 }

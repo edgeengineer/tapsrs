@@ -1,6 +1,6 @@
 //! FFI error handling utilities
 
-use super::types::TapsError;
+use super::types::TransportServicesError;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -10,7 +10,7 @@ thread_local! {
 }
 
 /// Set the last error message
-pub fn set_last_error(err: &crate::TapsError) {
+pub fn set_last_error(err: &crate::TransportServicesError) {
     let msg = format!("{}", err);
     let c_msg = CString::new(msg).unwrap_or_else(|_| CString::new("Unknown error").unwrap());
     LAST_ERROR.with(|e| {
@@ -20,7 +20,7 @@ pub fn set_last_error(err: &crate::TapsError) {
 
 /// Get the last error message
 #[no_mangle]
-pub extern "C" fn taps_get_last_error() -> *const c_char {
+pub extern "C" fn transport_services_get_last_error() -> *const c_char {
     LAST_ERROR.with(|e| {
         e.borrow()
             .as_ref()
@@ -31,7 +31,7 @@ pub extern "C" fn taps_get_last_error() -> *const c_char {
 
 /// Clear the last error message
 #[no_mangle]
-pub extern "C" fn taps_clear_last_error() {
+pub extern "C" fn transport_services_clear_last_error() {
     LAST_ERROR.with(|e| {
         *e.borrow_mut() = None;
     });

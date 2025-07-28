@@ -1,4 +1,4 @@
-//! Message implementation for TAPS
+//! Message implementation for Transport Services
 //! Based on RFC 9622 Section 9.1 (Messages and Framers)
 
 use crate::{MessageProperties, LocalEndpoint, RemoteEndpoint};

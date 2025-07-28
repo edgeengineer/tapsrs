@@ -1,4 +1,4 @@
-//! Core data types and enumerations for TAPS
+//! Core data types and enumerations for Transport Services
 //! Based on RFC 9622 Section 1.1 (Terminology and Notation)
 
 use std::net::{IpAddr, SocketAddr};

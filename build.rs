@@ -1,4 +1,4 @@
-//! Build script for TAPS library
+//! Build script for Transport Services library
 //! Handles platform-specific configuration
 
 use std::env;
@@ -53,6 +53,6 @@ fn main() {
             .with_language(cbindgen::Language::C)
             .generate()
             .expect("Unable to generate bindings")
-            .write_to_file("taps.h");
+            .write_to_file("transport_services.h");
     }
 }

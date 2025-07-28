@@ -1,8 +1,8 @@
-//! Listener implementation for TAPS
+//! Listener implementation for Transport Services
 //! Based on RFC 9622 Section 7.2 (Passive Open: Listen)
 
 use crate::{
-    Preconnection, Connection, Result, TapsError
+    Preconnection, Connection, Result, TransportServicesError
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
@@ -63,7 +63,7 @@ impl Listener {
     pub async fn accept(&mut self) -> Result<Connection> {
         match self.connection_receiver.recv().await {
             Some(connection) => Ok(connection),
-            None => Err(TapsError::InvalidState("Listener closed".to_string())),
+            None => Err(TransportServicesError::InvalidState("Listener closed".to_string())),
         }
     }
 
@@ -97,10 +97,10 @@ impl Listener {
         let inner = self.inner.read().await;
         if inner.active {
             inner.connection_sender.send(connection)
-                .map_err(|_| TapsError::InvalidState("Listener channel closed".to_string()))?;
+                .map_err(|_| TransportServicesError::InvalidState("Listener channel closed".to_string()))?;
             Ok(())
         } else {
-            Err(TapsError::InvalidState("Listener is not active".to_string()))
+            Err(TransportServicesError::InvalidState("Listener is not active".to_string()))
         }
     }
 }

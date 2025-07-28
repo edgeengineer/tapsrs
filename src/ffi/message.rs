@@ -6,10 +6,10 @@ use std::slice;
 
 /// Create a new message
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_new(
+pub unsafe extern "C" fn transport_services_message_new(
     data: *const u8,
     length: usize,
-) -> *mut TapsHandle {
+) -> *mut TransportServicesHandle {
     if data.is_null() || length == 0 {
         return std::ptr::null_mut();
     }
@@ -22,8 +22,8 @@ pub unsafe extern "C" fn taps_message_new(
 
 /// Get message data
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_get_data(
-    handle: *mut TapsHandle,
+pub unsafe extern "C" fn transport_services_message_get_data(
+    handle: *mut TransportServicesHandle,
     length: *mut usize,
 ) -> *const u8 {
     if handle.is_null() || length.is_null() {
@@ -39,55 +39,55 @@ pub unsafe extern "C" fn taps_message_get_data(
 
 /// Set message priority
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_set_priority(
-    handle: *mut TapsHandle,
+pub unsafe extern "C" fn transport_services_message_set_priority(
+    handle: *mut TransportServicesHandle,
     priority: i32,
-) -> types::TapsError {
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
     
     let message = handle_mut::<Message>(handle);
     message.properties_mut().priority = Some(priority);
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Set message lifetime
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_set_lifetime(
-    handle: *mut TapsHandle,
+pub unsafe extern "C" fn transport_services_message_set_lifetime(
+    handle: *mut TransportServicesHandle,
     lifetime_ms: u64,
-) -> types::TapsError {
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
     
     let message = handle_mut::<Message>(handle);
     message.properties_mut().lifetime = Some(std::time::Duration::from_millis(lifetime_ms));
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Mark message as idempotent
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_set_idempotent(
-    handle: *mut TapsHandle,
+pub unsafe extern "C" fn transport_services_message_set_idempotent(
+    handle: *mut TransportServicesHandle,
     idempotent: bool,
-) -> types::TapsError {
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
     
     let message = handle_mut::<Message>(handle);
     message.properties_mut().idempotent = idempotent;
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Free a message handle
 #[no_mangle]
-pub unsafe extern "C" fn taps_message_free(handle: *mut TapsHandle) {
+pub unsafe extern "C" fn transport_services_message_free(handle: *mut TransportServicesHandle) {
     if !handle.is_null() {
         let _ = from_handle::<Message>(handle);
     }

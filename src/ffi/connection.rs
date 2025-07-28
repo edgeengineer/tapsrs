@@ -6,11 +6,11 @@ use std::slice;
 
 /// Get the state of a connection
 #[no_mangle]
-pub unsafe extern "C" fn taps_connection_get_state(
-    handle: *mut TapsHandle,
-) -> types::TapsConnectionState {
+pub unsafe extern "C" fn transport_services_connection_get_state(
+    handle: *mut TransportServicesHandle,
+) -> types::TransportServicesConnectionState {
     if handle.is_null() {
-        return types::TapsConnectionState::Closed;
+        return types::TransportServicesConnectionState::Closed;
     }
 
     let conn = handle_ref::<Connection>(handle);
@@ -24,14 +24,14 @@ pub unsafe extern "C" fn taps_connection_get_state(
 
 /// Send a message on a connection
 #[no_mangle]
-pub unsafe extern "C" fn taps_connection_send(
-    handle: *mut TapsHandle,
-    message: *const types::TapsMessage,
-    callback: types::TapsErrorCallback,
+pub unsafe extern "C" fn transport_services_connection_send(
+    handle: *mut TransportServicesHandle,
+    message: *const types::TransportServicesMessage,
+    callback: types::TransportServicesErrorCallback,
     user_data: *mut c_void,
-) -> types::TapsError {
+) -> types::TransportServicesError {
     if handle.is_null() || message.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let conn = handle_ref::<Connection>(handle);
@@ -39,7 +39,7 @@ pub unsafe extern "C" fn taps_connection_send(
     
     // Create message from FFI data
     if msg.data.is_null() || msg.length == 0 {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
     
     let data = slice::from_raw_parts(msg.data, msg.length).to_vec();
@@ -68,27 +68,27 @@ pub unsafe extern "C" fn taps_connection_send(
         rt.block_on(async {
             match conn_clone.send(rust_msg).await {
                 Ok(()) => {
-                    callback(types::TapsError::Success, std::ptr::null(), user_data);
+                    callback(types::TransportServicesError::Success, std::ptr::null(), user_data);
                 }
                 Err(e) => {
                     error::set_last_error(&e);
-                    let error_code = types::TapsError::from(e);
-                    callback(error_code, error::taps_get_last_error(), user_data);
+                    let error_code = types::TransportServicesError::from(e);
+                    callback(error_code, error::transport_services_get_last_error(), user_data);
                 }
             }
         });
     });
     
-    types::TapsError::Success
+    types::TransportServicesError::Success
 }
 
 /// Close a connection gracefully
 #[no_mangle]
-pub unsafe extern "C" fn taps_connection_close(
-    handle: *mut TapsHandle,
-) -> types::TapsError {
+pub unsafe extern "C" fn transport_services_connection_close(
+    handle: *mut TransportServicesHandle,
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let conn = handle_ref::<Connection>(handle);
@@ -96,21 +96,21 @@ pub unsafe extern "C" fn taps_connection_close(
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(conn.close()) {
-        Ok(()) => types::TapsError::Success,
+        Ok(()) => types::TransportServicesError::Success,
         Err(e) => {
             error::set_last_error(&e);
-            types::TapsError::from(e)
+            types::TransportServicesError::from(e)
         }
     }
 }
 
 /// Abort a connection immediately
 #[no_mangle]
-pub unsafe extern "C" fn taps_connection_abort(
-    handle: *mut TapsHandle,
-) -> types::TapsError {
+pub unsafe extern "C" fn transport_services_connection_abort(
+    handle: *mut TransportServicesHandle,
+) -> types::TransportServicesError {
     if handle.is_null() {
-        return types::TapsError::InvalidParameters;
+        return types::TransportServicesError::InvalidParameters;
     }
 
     let conn = handle_ref::<Connection>(handle);
@@ -118,17 +118,17 @@ pub unsafe extern "C" fn taps_connection_abort(
     // Use tokio runtime to execute async operation
     let rt = tokio::runtime::Runtime::new().unwrap();
     match rt.block_on(conn.abort()) {
-        Ok(()) => types::TapsError::Success,
+        Ok(()) => types::TransportServicesError::Success,
         Err(e) => {
             error::set_last_error(&e);
-            types::TapsError::from(e)
+            types::TransportServicesError::from(e)
         }
     }
 }
 
 /// Free a connection handle
 #[no_mangle]
-pub unsafe extern "C" fn taps_connection_free(handle: *mut TapsHandle) {
+pub unsafe extern "C" fn transport_services_connection_free(handle: *mut TransportServicesHandle) {
     if !handle.is_null() {
         let _ = from_handle::<Connection>(handle);
     }
