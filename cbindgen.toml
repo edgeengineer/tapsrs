@@ -1,0 +1,29 @@
+language = "C"
+
+[export]
+include = [
+    "Connection",
+    "Listener",
+    "MessageContext",
+    "Preconnection",
+    "taps_preconnection_create",
+    "taps_preconnection_free",
+    "taps_preconnection_add_remote_endpoint",
+    "taps_preconnection_require_reliability",
+    "taps_preconnection_prefer_reliability",
+    "taps_preconnection_avoid_reliability",
+    "taps_preconnection_prohibit_reliability",
+    "taps_remote_endpoint_create",
+    "taps_remote_endpoint_free",
+    "taps_remote_endpoint_with_hostname",
+    "taps_remote_endpoint_with_port",
+    "taps_connection_initiate",
+    "taps_connection_send",
+    "taps_connection_receive",
+    "taps_connection_close",
+    "taps_listener_listen",
+]
+
+[parse]
+parse_deps = true
+include = ["tapsrs"] 
