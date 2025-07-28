@@ -34,4 +34,7 @@ mod mtu_tests;
 mod group_termination_tests;
 
 #[cfg(test)]
+mod property_updates_tests;
+
+#[cfg(test)]
 mod integration_tests;
