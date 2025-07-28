@@ -533,13 +533,44 @@ impl Connection {
 
     /// Add a remote endpoint to the connection
     /// RFC Section 7.5
-    pub async fn add_remote(&self, _endpoint: RemoteEndpoint) -> Result<()> {
-        let inner = self.inner.read().await;
+    pub async fn add_remote(&self, endpoint: RemoteEndpoint) -> Result<()> {
+        let mut inner = self.inner.write().await;
         
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
-                // TODO: Implement adding remote endpoints to active connection
-                Ok(())
+                // For single-path TCP connections, we can only have one remote endpoint
+                // In a real implementation with multipath support (like MPTCP or QUIC),
+                // we would add this to a list of available endpoints
+                
+                // Check if this is the same endpoint we already have
+                if let Some(ref current_remote) = inner.remote_endpoint {
+                    // Check if any identifiers match
+                    for new_id in &endpoint.identifiers {
+                        for existing_id in &current_remote.identifiers {
+                            if new_id == existing_id {
+                                // Endpoint already known, ignore as per RFC
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+                
+                // For now, since we only support single-path TCP, we can only
+                // update the remote endpoint if we don't have an established connection yet
+                if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
+                    // Update the remote endpoint for future connection attempts
+                    inner.remote_endpoint = Some(endpoint);
+                    Ok(())
+                } else {
+                    // Log that we received the endpoint but can't use it with current transport
+                    // In a multipath implementation, we would:
+                    // 1. Store this endpoint in a list
+                    // 2. Potentially establish a new subflow to this endpoint
+                    // 3. Update routing tables
+                    
+                    // For now, we just acknowledge receipt but don't use it
+                    Ok(())
+                }
             }
             _ => Err(TransportServicesError::InvalidState(
                 "Cannot add endpoints to a closed connection".to_string()
@@ -548,13 +579,43 @@ impl Connection {
     }
 
     /// Add a local endpoint to the connection
-    pub async fn add_local(&self, _endpoint: LocalEndpoint) -> Result<()> {
-        let inner = self.inner.read().await;
+    pub async fn add_local(&self, endpoint: LocalEndpoint) -> Result<()> {
+        let mut inner = self.inner.write().await;
         
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
-                // TODO: Implement adding local endpoints to active connection
-                Ok(())
+                // For single-path TCP connections, we can only have one local endpoint
+                // In a real implementation with multipath support (like MPTCP or QUIC),
+                // we would add this to a list of available endpoints
+                
+                // Check if this is the same endpoint we already have
+                if let Some(ref current_local) = inner.local_endpoint {
+                    // Check if any identifiers match
+                    for new_id in &endpoint.identifiers {
+                        for existing_id in &current_local.identifiers {
+                            if new_id == existing_id {
+                                // Endpoint already known, ignore
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+                
+                // For now, since we only support single-path TCP, we can only
+                // update the local endpoint if we don't have an established connection yet
+                if inner.state == ConnectionState::Establishing && inner.tcp_stream.is_none() {
+                    // Update the local endpoint for future connection attempts
+                    inner.local_endpoint = Some(endpoint);
+                    Ok(())
+                } else {
+                    // In a multipath implementation, we would:
+                    // 1. Store this endpoint in a list
+                    // 2. Potentially bind a new socket to this endpoint
+                    // 3. Use it for new subflows
+                    
+                    // For now, we just acknowledge receipt but don't use it
+                    Ok(())
+                }
             }
             _ => Err(TransportServicesError::InvalidState(
                 "Cannot add endpoints to a closed connection".to_string()

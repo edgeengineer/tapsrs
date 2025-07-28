@@ -25,4 +25,7 @@ mod message_properties_tests;
 mod connection_properties_tests;
 
 #[cfg(test)]
+mod endpoint_management_tests;
+
+#[cfg(test)]
 mod integration_tests;
