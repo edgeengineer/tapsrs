@@ -2,9 +2,9 @@
 //! Based on RFC 9622 Section 7.4 (Connection Groups)
 
 use crate::{TransportProperties, LocalEndpoint, RemoteEndpoint};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 use uuid::Uuid;
 
 /// Unique identifier for a connection group
@@ -24,6 +24,9 @@ impl std::fmt::Display for ConnectionGroupId {
     }
 }
 
+// Forward declaration to avoid circular dependency
+pub struct Connection;
+
 /// Represents a group of related connections that share properties
 /// RFC Section 7.4: Connection Groups
 #[derive(Debug)]
@@ -40,6 +43,9 @@ pub struct ConnectionGroup {
     pub connection_count: Arc<AtomicU64>,
     /// Whether this group supports multistreaming (e.g., QUIC, HTTP/2)
     pub multistreaming_capable: bool,
+    /// Weak references to all connections in this group
+    /// Using Weak to avoid circular references
+    pub(crate) connections: Arc<Mutex<Vec<Weak<RwLock<crate::connection::ConnectionInner>>>>>,
 }
 
 impl ConnectionGroup {
@@ -56,6 +62,7 @@ impl ConnectionGroup {
             remote_endpoints: Arc::new(RwLock::new(remote_endpoints)),
             connection_count: Arc::new(AtomicU64::new(0)),
             multistreaming_capable: false, // Will be determined by protocol selection
+            connections: Arc::new(Mutex::new(Vec::new())),
         }
     }
     
@@ -78,6 +85,30 @@ impl ConnectionGroup {
     pub fn has_connections(&self) -> bool {
         self.connection_count() > 0
     }
+    
+    /// Register a connection with this group
+    pub(crate) async fn register_connection(&self, conn_inner: Weak<RwLock<crate::connection::ConnectionInner>>) {
+        let mut connections = self.connections.lock().await;
+        connections.push(conn_inner);
+        // Clean up any dead weak references while we have the lock
+        connections.retain(|weak| weak.strong_count() > 0);
+    }
+    
+    /// Get all active connections in this group
+    pub(crate) async fn get_connections(&self) -> Vec<Arc<RwLock<crate::connection::ConnectionInner>>> {
+        let mut connections = self.connections.lock().await;
+        // Clean up dead references and collect strong references
+        let mut active = Vec::new();
+        connections.retain(|weak| {
+            if let Some(strong) = weak.upgrade() {
+                active.push(strong);
+                true
+            } else {
+                false
+            }
+        });
+        active
+    }
 }
 
 impl Clone for ConnectionGroup {
@@ -89,6 +120,7 @@ impl Clone for ConnectionGroup {
             remote_endpoints: Arc::clone(&self.remote_endpoints),
             connection_count: Arc::clone(&self.connection_count),
             multistreaming_capable: self.multistreaming_capable,
+            connections: Arc::clone(&self.connections),
         }
     }
 }

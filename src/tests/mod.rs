@@ -31,4 +31,7 @@ mod endpoint_management_tests;
 mod mtu_tests;
 
 #[cfg(test)]
+mod group_termination_tests;
+
+#[cfg(test)]
 mod integration_tests;

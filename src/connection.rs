@@ -26,7 +26,7 @@ pub struct Connection {
     event_receiver: Arc<RwLock<mpsc::UnboundedReceiver<ConnectionEvent>>>,
 }
 
-struct ConnectionInner {
+pub(crate) struct ConnectionInner {
     preconnection: Preconnection,
     state: ConnectionState,
     local_endpoint: Option<LocalEndpoint>,
@@ -506,6 +506,8 @@ impl Connection {
                     drop(inner_mut);
                     // Add the original connection to the group
                     group.add_connection();
+                    // Register this connection with the group
+                    group.register_connection(Arc::downgrade(&self.inner)).await;
                 }
                 
                 // Create a new connection in the same group
@@ -523,6 +525,8 @@ impl Connection {
                 
                 // Increment connection count for the new connection
                 group.add_connection();
+                // Register the new connection with the group
+                group.register_connection(Arc::downgrade(&new_conn.inner)).await;
                 
                 Ok(new_conn)
             }
@@ -791,16 +795,107 @@ impl Connection {
     /// Close all connections in the group
     /// RFC Section 10
     pub async fn close_group(&self) -> Result<()> {
-        // TODO: Implement group-wide close
-        // For now, just close this connection
-        self.close().await
+        let inner = self.inner.read().await;
+        
+        if let Some(ref group) = inner.connection_group {
+            // Get all connections in the group
+            let connections = group.get_connections().await;
+            drop(inner); // Release lock before closing connections
+            
+            // Close all connections in parallel
+            let mut close_tasks = Vec::new();
+            for conn_inner in connections {
+                let task = tokio::spawn(async move {
+                    let mut inner = conn_inner.write().await;
+                    
+                    match inner.state {
+                        ConnectionState::Established | ConnectionState::Establishing => {
+                            inner.state = ConnectionState::Closing;
+                            
+                            // Clear any pending batched messages before closing
+                            inner.batched_messages.clear();
+                            
+                            // Perform graceful close on TCP stream
+                            if let Some(ref mut stream) = inner.tcp_stream {
+                                let _ = stream.flush().await;
+                                let _ = stream.shutdown().await;
+                            }
+                            
+                            inner.state = ConnectionState::Closed;
+                            inner.pending_messages.clear();
+                            inner.receive_buffer.clear();
+                            inner.tcp_stream = None;
+                            
+                            // Note: We don't decrement connection count here as it's handled by each connection
+                        }
+                        _ => {} // Already closing or closed
+                    }
+                });
+                close_tasks.push(task);
+            }
+            
+            // Wait for all connections to close
+            for task in close_tasks {
+                let _ = task.await;
+            }
+            
+            // Send Closed event for this connection
+            let _ = self.event_sender.send(ConnectionEvent::Closed);
+            Ok(())
+        } else {
+            // No group, just close this connection
+            self.close().await
+        }
     }
     
     /// Abort all connections in the group
     pub async fn abort_group(&self) -> Result<()> {
-        // TODO: Implement group-wide abort
-        // For now, just abort this connection
-        self.abort().await
+        let inner = self.inner.read().await;
+        
+        if let Some(ref group) = inner.connection_group {
+            // Get all connections in the group
+            let connections = group.get_connections().await;
+            drop(inner); // Release lock before aborting connections
+            
+            // Abort all connections in parallel
+            let mut abort_tasks = Vec::new();
+            for conn_inner in connections {
+                let task = tokio::spawn(async move {
+                    let mut inner = conn_inner.write().await;
+                    
+                    let was_not_closed = inner.state != ConnectionState::Closed;
+                    if was_not_closed {
+                        // Immediately set state to Closed
+                        inner.state = ConnectionState::Closed;
+                        
+                        // Force close the TCP stream
+                        if let Some(stream) = inner.tcp_stream.take() {
+                            drop(stream); // This sends TCP RST
+                        }
+                        
+                        // Clear all buffers
+                        inner.pending_messages.clear();
+                        inner.batched_messages.clear();
+                        inner.receive_buffer.clear();
+                    }
+                });
+                abort_tasks.push(task);
+            }
+            
+            // Wait for all connections to abort
+            for task in abort_tasks {
+                let _ = task.await;
+            }
+            
+            // Send ConnectionError event for this connection
+            let _ = self.event_sender.send(ConnectionEvent::ConnectionError(
+                "Connection group aborted".to_string()
+            ));
+            Ok(())
+        } else {
+            // No group, just abort this connection
+            self.abort().await
+        }
     }
 
     // Internal method to update state
