@@ -365,6 +365,187 @@ pub struct TransportProperties {
     pub message_properties: MessageProperties,
 }
 
+impl TransportProperties {
+    /// Create a new TransportProperties with default values
+    /// RFC Section 6.2: NewTransportProperties()
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Set a property value
+    /// RFC Section 6.2: TransportProperties.Set(property, value)
+    pub fn set(&mut self, property: TransportProperty, value: PropertyValue) -> &mut Self {
+        match property {
+            // Selection Properties
+            TransportProperty::Reliability => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.reliability = pref;
+                }
+            }
+            TransportProperty::PreserveMsgBoundaries => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.preserve_msg_boundaries = pref;
+                }
+            }
+            TransportProperty::PerMsgReliability => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.per_msg_reliability = pref;
+                }
+            }
+            TransportProperty::PreserveOrder => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.preserve_order = pref;
+                }
+            }
+            TransportProperty::ZeroRttMsg => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.zero_rtt_msg = pref;
+                }
+            }
+            TransportProperty::Multistreaming => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.multistreaming = pref;
+                }
+            }
+            TransportProperty::FullChecksumSend => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.full_checksum_send = pref;
+                }
+            }
+            TransportProperty::FullChecksumRecv => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.full_checksum_recv = pref;
+                }
+            }
+            TransportProperty::CongestionControl => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.congestion_control = pref;
+                }
+            }
+            TransportProperty::KeepAlive => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.keep_alive = pref;
+                }
+            }
+            TransportProperty::Interface => {
+                if let PropertyValue::StringPreference(iface, pref) = value {
+                    self.selection_properties.interface.push((iface, pref));
+                }
+            }
+            TransportProperty::Pvd => {
+                if let PropertyValue::StringPreference(pvd, pref) = value {
+                    self.selection_properties.pvd.push((pvd, pref));
+                }
+            }
+            TransportProperty::UseTemporaryLocalAddress => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.use_temporary_local_address = pref;
+                }
+            }
+            TransportProperty::Multipath => {
+                if let PropertyValue::Multipath(config) = value {
+                    self.selection_properties.multipath = config;
+                }
+            }
+            TransportProperty::AdvertisesAltaddr => {
+                if let PropertyValue::Bool(val) = value {
+                    self.selection_properties.advertises_altaddr = val;
+                }
+            }
+            TransportProperty::Direction => {
+                if let PropertyValue::Direction(dir) = value {
+                    self.selection_properties.direction = dir;
+                }
+            }
+            TransportProperty::SoftErrorNotify => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.soft_error_notify = pref;
+                }
+            }
+            TransportProperty::ActiveReadBeforeSend => {
+                if let PropertyValue::Preference(pref) = value {
+                    self.selection_properties.active_read_before_send = pref;
+                }
+            }
+            // Connection Properties
+            TransportProperty::ConnectionTimeout => {
+                if let PropertyValue::Duration(duration) = value {
+                    self.connection_properties.connection_timeout = Some(duration);
+                }
+            }
+            TransportProperty::KeepAliveTimeout => {
+                if let PropertyValue::Duration(duration) = value {
+                    self.connection_properties.keep_alive_timeout = Some(duration);
+                }
+            }
+            TransportProperty::ConnectionPriority => {
+                if let PropertyValue::Integer(priority) = value {
+                    self.connection_properties.connection_priority = Some(priority);
+                }
+            }
+            TransportProperty::MaximumMessageSizeOnSend => {
+                if let PropertyValue::Size(size) = value {
+                    self.connection_properties.maximum_message_size_on_send = Some(size);
+                }
+            }
+            TransportProperty::MaximumMessageSizeOnReceive => {
+                if let PropertyValue::Size(size) = value {
+                    self.connection_properties.maximum_message_size_on_receive = Some(size);
+                }
+            }
+        }
+        self
+    }
+    
+    /// Create a new builder for TransportProperties
+    pub fn builder() -> TransportPropertiesBuilder {
+        TransportPropertiesBuilder::new()
+    }
+}
+
+/// Enumeration of all transport properties
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportProperty {
+    // Selection Properties
+    Reliability,
+    PreserveMsgBoundaries,
+    PerMsgReliability,
+    PreserveOrder,
+    ZeroRttMsg,
+    Multistreaming,
+    FullChecksumSend,
+    FullChecksumRecv,
+    CongestionControl,
+    KeepAlive,
+    Interface,
+    Pvd,
+    UseTemporaryLocalAddress,
+    Multipath,
+    AdvertisesAltaddr,
+    Direction,
+    SoftErrorNotify,
+    ActiveReadBeforeSend,
+    // Connection Properties
+    ConnectionTimeout,
+    KeepAliveTimeout,
+    ConnectionPriority,
+    MaximumMessageSizeOnSend,
+    MaximumMessageSizeOnReceive,
+}
+
+/// Values that can be assigned to transport properties
+#[derive(Debug, Clone)]
+pub enum PropertyValue {
+    Preference(Preference),
+    Bool(bool),
+    Integer(i32),
+    Size(usize),
+    Duration(Duration),
+    StringPreference(String, Preference),
+    Multipath(MultipathConfig),
+    Direction(CommunicationDirection),
+}
+
 /// Selection properties (used during preestablishment)
 #[derive(Debug, Clone)]
 pub struct SelectionProperties {
@@ -548,4 +729,155 @@ pub enum ConnectionEvent {
     PathChange,
     SoftError(String),
     Closed,
+}
+
+/// Builder for TransportProperties
+pub struct TransportPropertiesBuilder {
+    properties: TransportProperties,
+}
+
+impl TransportPropertiesBuilder {
+    /// Create a new builder
+    pub fn new() -> Self {
+        Self {
+            properties: TransportProperties::new(),
+        }
+    }
+    
+    /// Set reliability preference
+    pub fn reliability(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::Reliability, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set preserve message boundaries preference
+    pub fn preserve_msg_boundaries(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::PreserveMsgBoundaries, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set per-message reliability preference
+    pub fn per_msg_reliability(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::PerMsgReliability, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set preserve order preference
+    pub fn preserve_order(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::PreserveOrder, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set zero RTT message preference
+    pub fn zero_rtt_msg(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::ZeroRttMsg, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set multistreaming preference
+    pub fn multistreaming(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::Multistreaming, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set full checksum send preference
+    pub fn full_checksum_send(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::FullChecksumSend, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set full checksum receive preference
+    pub fn full_checksum_recv(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::FullChecksumRecv, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set congestion control preference
+    pub fn congestion_control(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::CongestionControl, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set keep alive preference
+    pub fn keep_alive(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::KeepAlive, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Add interface preference
+    pub fn interface(mut self, iface: impl Into<String>, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::Interface, PropertyValue::StringPreference(iface.into(), pref));
+        self
+    }
+    
+    /// Add PVD preference
+    pub fn pvd(mut self, pvd: impl Into<String>, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::Pvd, PropertyValue::StringPreference(pvd.into(), pref));
+        self
+    }
+    
+    /// Set use temporary local address preference
+    pub fn use_temporary_local_address(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::UseTemporaryLocalAddress, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set multipath configuration
+    pub fn multipath(mut self, config: MultipathConfig) -> Self {
+        self.properties.set(TransportProperty::Multipath, PropertyValue::Multipath(config));
+        self
+    }
+    
+    /// Set advertises alternate address
+    pub fn advertises_altaddr(mut self, val: bool) -> Self {
+        self.properties.set(TransportProperty::AdvertisesAltaddr, PropertyValue::Bool(val));
+        self
+    }
+    
+    /// Set communication direction
+    pub fn direction(mut self, dir: CommunicationDirection) -> Self {
+        self.properties.set(TransportProperty::Direction, PropertyValue::Direction(dir));
+        self
+    }
+    
+    /// Set soft error notify preference
+    pub fn soft_error_notify(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::SoftErrorNotify, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set active read before send preference
+    pub fn active_read_before_send(mut self, pref: Preference) -> Self {
+        self.properties.set(TransportProperty::ActiveReadBeforeSend, PropertyValue::Preference(pref));
+        self
+    }
+    
+    /// Set connection timeout
+    pub fn connection_timeout(mut self, duration: Duration) -> Self {
+        self.properties.set(TransportProperty::ConnectionTimeout, PropertyValue::Duration(duration));
+        self
+    }
+    
+    /// Set keep alive timeout
+    pub fn keep_alive_timeout(mut self, duration: Duration) -> Self {
+        self.properties.set(TransportProperty::KeepAliveTimeout, PropertyValue::Duration(duration));
+        self
+    }
+    
+    /// Set connection priority
+    pub fn connection_priority(mut self, priority: i32) -> Self {
+        self.properties.set(TransportProperty::ConnectionPriority, PropertyValue::Integer(priority));
+        self
+    }
+    
+    /// Build the TransportProperties
+    pub fn build(self) -> TransportProperties {
+        self.properties
+    }
+}
+
+impl Default for TransportPropertiesBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }

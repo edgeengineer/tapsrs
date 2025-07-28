@@ -46,14 +46,88 @@ pub struct TransportServicesEndpoint {
     pub interface: *const c_char,
 }
 
+/// FFI representation of multipath configuration
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum TransportServicesMultipathConfig {
+    Disabled = 0,
+    Active = 1,
+    Passive = 2,
+}
+
+impl From<crate::MultipathConfig> for TransportServicesMultipathConfig {
+    fn from(config: crate::MultipathConfig) -> Self {
+        match config {
+            crate::MultipathConfig::Disabled => TransportServicesMultipathConfig::Disabled,
+            crate::MultipathConfig::Active => TransportServicesMultipathConfig::Active,
+            crate::MultipathConfig::Passive => TransportServicesMultipathConfig::Passive,
+        }
+    }
+}
+
+impl From<TransportServicesMultipathConfig> for crate::MultipathConfig {
+    fn from(config: TransportServicesMultipathConfig) -> Self {
+        match config {
+            TransportServicesMultipathConfig::Disabled => crate::MultipathConfig::Disabled,
+            TransportServicesMultipathConfig::Active => crate::MultipathConfig::Active,
+            TransportServicesMultipathConfig::Passive => crate::MultipathConfig::Passive,
+        }
+    }
+}
+
+/// FFI representation of communication direction
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum TransportServicesCommunicationDirection {
+    Bidirectional = 0,
+    UnidirectionalSend = 1,
+    UnidirectionalReceive = 2,
+}
+
+impl From<crate::CommunicationDirection> for TransportServicesCommunicationDirection {
+    fn from(dir: crate::CommunicationDirection) -> Self {
+        match dir {
+            crate::CommunicationDirection::Bidirectional => TransportServicesCommunicationDirection::Bidirectional,
+            crate::CommunicationDirection::UnidirectionalSend => TransportServicesCommunicationDirection::UnidirectionalSend,
+            crate::CommunicationDirection::UnidirectionalReceive => TransportServicesCommunicationDirection::UnidirectionalReceive,
+        }
+    }
+}
+
+impl From<TransportServicesCommunicationDirection> for crate::CommunicationDirection {
+    fn from(dir: TransportServicesCommunicationDirection) -> Self {
+        match dir {
+            TransportServicesCommunicationDirection::Bidirectional => crate::CommunicationDirection::Bidirectional,
+            TransportServicesCommunicationDirection::UnidirectionalSend => crate::CommunicationDirection::UnidirectionalSend,
+            TransportServicesCommunicationDirection::UnidirectionalReceive => crate::CommunicationDirection::UnidirectionalReceive,
+        }
+    }
+}
+
 /// FFI representation of transport properties
 #[repr(C)]
 pub struct TransportServicesProperties {
+    // Selection Properties
     pub reliability: TransportServicesPreference,
     pub preserve_msg_boundaries: TransportServicesPreference,
+    pub per_msg_reliability: TransportServicesPreference,
     pub preserve_order: TransportServicesPreference,
+    pub zero_rtt_msg: TransportServicesPreference,
+    pub multistreaming: TransportServicesPreference,
+    pub full_checksum_send: TransportServicesPreference,
+    pub full_checksum_recv: TransportServicesPreference,
     pub congestion_control: TransportServicesPreference,
-    pub multipath: c_int,
+    pub keep_alive: TransportServicesPreference,
+    pub use_temporary_local_address: TransportServicesPreference,
+    pub multipath: TransportServicesMultipathConfig,
+    pub advertises_altaddr: bool,
+    pub direction: TransportServicesCommunicationDirection,
+    pub soft_error_notify: TransportServicesPreference,
+    pub active_read_before_send: TransportServicesPreference,
+    // Connection Properties
+    pub connection_timeout_ms: u64, // 0 means no timeout
+    pub keep_alive_timeout_ms: u64, // 0 means no timeout
+    pub connection_priority: i32,
 }
 
 /// FFI representation of security parameters

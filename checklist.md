@@ -27,27 +27,27 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] Builder methods for setting identifiers: `WithHostName`, `WithPort`, `WithService`, `WithIPAddress`, `WithInterface`.
     - [x] Support for Multicast endpoints (**RFC Section 6.1.1, Using Multicast Endpoints**).
     - [x] Support for Protocol-Specific endpoints (**RFC Section 6.1.3, Protocol-Specific Endpoints**).
-- [ ] Implement Transport Properties specification (**RFC Section 4, Transport Properties & 6.2, Specifying Transport Properties**):
-    - [ ] `TransportProperties` struct.
-    - [ ] A `Set` method for properties, likely using an enum to represent property keys.
-    - [ ] Implement all Selection Properties with a `Preference` enum (Require, Prefer, Avoid, Prohibit, NoPreference) as defined in **RFC Section 6.2**:
-        - [ ] `reliability` (**6.2.1, Reliable Data Transfer (Connection)**)
-        - [ ] `preserveMsgBoundaries` (**6.2.2, Preservation of Message Boundaries**)
-        - [ ] `perMsgReliability` (**6.2.3, Configure Per-Message Reliability**)
-        - [ ] `preserveOrder` (**6.2.4, Preservation of Data Ordering**)
-        - [ ] `zeroRttMsg` (**6.2.5, Use 0-RTT Session Establishment with a Safely Replayable Message**)
-        - [ ] `multistreaming` (**6.2.6, Multistream Connections in a Group**)
-        - [ ] `fullChecksumSend` / `fullChecksumRecv` (**6.2.7, Full Checksum Coverage on Sending**, **6.2.8, Full Checksum Coverage on Receiving**)
-        - [ ] `congestionControl` (**6.2.9, Congestion Control**)
-        - [ ] `keepAlive` (**6.2.10, Keep-Alive Packets**)
-        - [ ] `interface` (**6.2.11, Interface Instance or Type**)
-        - [ ] `pvd` (**6.2.12, Provisioning Domain Instance or Type**)
-        - [ ] `useTemporaryLocalAddress` (**6.2.13, Use Temporary Local Address**)
-        - [ ] `multipath` (**6.2.14, Multipath Transport**)
-        - [ ] `advertisesAltaddr` (**6.2.15, Advertisement of Alternative Addresses**)
-        - [ ] `direction` (**6.2.16, Direction of Communication**)
-        - [ ] `softErrorNotify` (**6.2.17, Notification of ICMP Soft Error Message Arrival**)
-        - [ ] `activeReadBeforeSend` (**6.2.18, Initiating Side Is Not the First to Write**)
+- [x] Implement Transport Properties specification (**RFC Section 4, Transport Properties & 6.2, Specifying Transport Properties**):
+    - [x] `TransportProperties` struct.
+    - [x] A `Set` method for properties, likely using an enum to represent property keys.
+    - [x] Implement all Selection Properties with a `Preference` enum (Require, Prefer, Avoid, Prohibit, NoPreference) as defined in **RFC Section 6.2**:
+        - [x] `reliability` (**6.2.1, Reliable Data Transfer (Connection)**)
+        - [x] `preserveMsgBoundaries` (**6.2.2, Preservation of Message Boundaries**)
+        - [x] `perMsgReliability` (**6.2.3, Configure Per-Message Reliability**)
+        - [x] `preserveOrder` (**6.2.4, Preservation of Data Ordering**)
+        - [x] `zeroRttMsg` (**6.2.5, Use 0-RTT Session Establishment with a Safely Replayable Message**)
+        - [x] `multistreaming` (**6.2.6, Multistream Connections in a Group**)
+        - [x] `fullChecksumSend` / `fullChecksumRecv` (**6.2.7, Full Checksum Coverage on Sending**, **6.2.8, Full Checksum Coverage on Receiving**)
+        - [x] `congestionControl` (**6.2.9, Congestion Control**)
+        - [x] `keepAlive` (**6.2.10, Keep-Alive Packets**)
+        - [x] `interface` (**6.2.11, Interface Instance or Type**)
+        - [x] `pvd` (**6.2.12, Provisioning Domain Instance or Type**)
+        - [x] `useTemporaryLocalAddress` (**6.2.13, Use Temporary Local Address**)
+        - [x] `multipath` (**6.2.14, Multipath Transport**)
+        - [x] `advertisesAltaddr` (**6.2.15, Advertisement of Alternative Addresses**)
+        - [x] `direction` (**6.2.16, Direction of Communication**)
+        - [x] `softErrorNotify` (**6.2.17, Notification of ICMP Soft Error Message Arrival**)
+        - [x] `activeReadBeforeSend` (**6.2.18, Initiating Side Is Not the First to Write**)
 - [ ] Implement Security Parameters specification (**RFC Section 6.3, Specifying Security Parameters and Callbacks**):
     - [ ] `SecurityParameters` struct.
     - [ ] Functions for disabled and opportunistic security.
