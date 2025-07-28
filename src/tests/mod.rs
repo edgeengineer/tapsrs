@@ -10,4 +10,7 @@ mod preconnection_tests;
 mod listener_tests;
 
 #[cfg(test)]
+mod rendezvous_tests;
+
+#[cfg(test)]
 mod integration_tests;

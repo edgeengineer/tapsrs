@@ -310,6 +310,12 @@ impl RemoteEndpointBuilder {
         self
     }
     
+    /// Add a socket address
+    pub fn socket_address(mut self, addr: SocketAddr) -> Self {
+        self.endpoint.identifiers.push(EndpointIdentifier::SocketAddress(addr));
+        self
+    }
+    
     /// Add an interface
     pub fn interface(mut self, interface: impl Into<String>) -> Self {
         self.endpoint = self.endpoint.with_interface(interface);
@@ -933,6 +939,15 @@ pub enum ConnectionEvent {
     PathChange,
     SoftError(String),
     Closed,
+}
+
+/// Event types that can be emitted during rendezvous
+#[derive(Debug, Clone)]
+pub enum RendezvousEvent {
+    /// Rendezvous completed successfully - connection established
+    RendezvousDone,
+    /// Rendezvous establishment failed
+    EstablishmentError(String),
 }
 
 /// Builder for TransportProperties

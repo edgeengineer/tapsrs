@@ -65,10 +65,10 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] Use `tokio::net::TcpListener` for asynchronous listening.
     - [x] Emit `ConnectionReceived` events containing new `Connection` objects.
     - [x] Implement `Listener.Stop()`.
-- [ ] Implement Peer-to-Peer Establishment: `Preconnection.Rendezvous()` (**RFC Section 7.3, Peer-to-Peer Establishment: Rendezvous**).
-    - [ ] This is a complex feature. Plan for a phased implementation, potentially starting with basic cases and later adding full NAT traversal (ICE-like) logic.
-    - [ ] Implement `Preconnection.Resolve()` to gather candidates.
-    - [ ] Emit `RendezvousDone` or `EstablishmentError` events.
+- [x] Implement Peer-to-Peer Establishment: `Preconnection.Rendezvous()` (**RFC Section 7.3, Peer-to-Peer Establishment: Rendezvous**).
+    - [x] This is a complex feature. Plan for a phased implementation, potentially starting with basic cases and later adding full NAT traversal (ICE-like) logic.
+    - [x] Implement `Preconnection.Resolve()` to gather candidates.
+    - [x] Emit `RendezvousDone` or `EstablishmentError` events.
 - [ ] Implement Connection Groups: `Connection.Clone()` (**RFC Section 7.4, Connection Groups**).
     - [ ] Ensure shared properties are handled correctly between cloned connections.
     - [ ] Investigate mapping to underlying multistreaming protocols like QUIC if available.

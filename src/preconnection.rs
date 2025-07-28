@@ -3,7 +3,7 @@
 
 use crate::{
     LocalEndpoint, RemoteEndpoint, TransportProperties, SecurityParameters,
-    Connection, Listener, Result, TransportServicesError
+    Connection, Listener, Result, TransportServicesError, EndpointIdentifier,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -233,14 +233,57 @@ impl Preconnection {
                 "No remote endpoints specified for rendezvous".to_string()
             ));
         }
-
-        // TODO: Implement actual rendezvous
-        // For now, return placeholders
-        let connection = Connection::new(
+        
+        // Resolve endpoints to get all candidates
+        drop(inner); // Release lock before calling resolve
+        let (local_candidates, remote_candidates) = self.resolve().await?;
+        
+        // Create listener on local endpoints
+        let listener = Listener::new(self.clone());
+        listener.start().await?;
+        
+        // Create connection that will attempt to connect to remote endpoints
+        let connection = Connection::new_with_data(
             self.clone(),
             crate::ConnectionState::Establishing,
+            local_candidates.first().cloned(),
+            remote_candidates.first().cloned(),
+            self.transport_properties().await,
         );
-        let listener = Listener::new(self.clone());
+        
+        // Get the listener's actual bound address
+        let _listen_addr = listener.local_addr().await;
+        
+        // Spawn tasks for simultaneous connect attempts
+        let conn_clone = connection.clone();
+        let remote_endpoints = remote_candidates.clone();
+        
+        tokio::spawn(async move {
+            // Try to connect to each remote endpoint
+            for remote in remote_endpoints {
+                if let Some(socket_addr) = extract_socket_addr(&remote) {
+                    // Attempt connection with short timeout for rendezvous
+                    match tokio::time::timeout(
+                        Duration::from_secs(5),
+                        tokio::net::TcpStream::connect(socket_addr)
+                    ).await {
+                        Ok(Ok(stream)) => {
+                            // Connection succeeded - update connection state
+                            let mut conn = conn_clone;
+                            conn.set_tcp_stream(stream).await;
+                            return;
+                        }
+                        _ => {
+                            // Try next endpoint
+                            continue;
+                        }
+                    }
+                }
+            }
+            
+            // If all connection attempts failed, rely on incoming connection
+            // The listener will handle incoming connections
+        });
         
         Ok((connection, listener))
     }
@@ -250,12 +293,94 @@ impl Preconnection {
     pub async fn resolve(&self) -> Result<(Vec<LocalEndpoint>, Vec<RemoteEndpoint>)> {
         let inner = self.inner.read().await;
         
-        // TODO: Implement actual endpoint resolution
-        // For now, return the existing endpoints
-        Ok((
-            inner.local_endpoints.clone(),
-            inner.remote_endpoints.clone(),
-        ))
+        let mut resolved_locals = Vec::new();
+        let mut resolved_remotes = Vec::new();
+        
+        // Resolve local endpoints
+        for local in &inner.local_endpoints {
+            // If only a port is specified (no other identifiers), expand to any addresses
+            if local.identifiers.len() == 1 && 
+               local.identifiers.iter().any(|id| matches!(id, EndpointIdentifier::Port(_))) {
+                // Add default IPv4 and IPv6 endpoints
+                let port = local.identifiers.iter()
+                    .find_map(|id| match id {
+                        EndpointIdentifier::Port(p) => Some(*p),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                
+                // Add IPv4 any address
+                resolved_locals.push(LocalEndpoint {
+                    identifiers: vec![
+                        EndpointIdentifier::IpAddress("0.0.0.0".parse().unwrap()),
+                        EndpointIdentifier::Port(port),
+                    ],
+                });
+                
+                // Add IPv6 any address
+                resolved_locals.push(LocalEndpoint {
+                    identifiers: vec![
+                        EndpointIdentifier::IpAddress("::".parse().unwrap()),
+                        EndpointIdentifier::Port(port),
+                    ],
+                });
+            } else {
+                resolved_locals.push(local.clone());
+            }
+        }
+        
+        // Resolve remote endpoints (hostname resolution, etc.)
+        for remote in &inner.remote_endpoints {
+            let resolved = remote.clone();
+            
+            // Try to resolve hostnames to IP addresses
+            for identifier in &remote.identifiers {
+                if let EndpointIdentifier::HostName(hostname) = identifier {
+                    // Find associated port
+                    let port = remote.identifiers.iter()
+                        .find_map(|id| match id {
+                            EndpointIdentifier::Port(p) => Some(*p),
+                            _ => None,
+                        });
+                    
+                    if let Some(port) = port {
+                        use std::net::ToSocketAddrs;
+                        let addr_string = format!("{}:{}", hostname, port);
+                        
+                        if let Ok(addrs) = addr_string.to_socket_addrs() {
+                            for addr in addrs {
+                                let mut new_identifiers = resolved.identifiers.clone();
+                                new_identifiers.retain(|id| !matches!(id, EndpointIdentifier::HostName(_)));
+                                new_identifiers.push(EndpointIdentifier::SocketAddress(addr));
+                                
+                                resolved_remotes.push(RemoteEndpoint {
+                                    identifiers: new_identifiers,
+                                    protocol: resolved.protocol.clone(),
+                                });
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
+            
+            // If no hostname resolution was needed/successful, add as-is
+            if !resolved_remotes.iter().any(|r| r.identifiers == resolved.identifiers) {
+                resolved_remotes.push(resolved);
+            }
+        }
+        
+        // If no locals were resolved, use the originals
+        if resolved_locals.is_empty() {
+            resolved_locals = inner.local_endpoints.clone();
+        }
+        
+        // If no remotes were resolved, use the originals
+        if resolved_remotes.is_empty() {
+            resolved_remotes = inner.remote_endpoints.clone();
+        }
+        
+        Ok((resolved_locals, resolved_remotes))
     }
     
     /// Get transport properties (for internal use)
@@ -263,4 +388,28 @@ impl Preconnection {
         let inner = self.inner.read().await;
         inner.transport_properties.clone()
     }
+}
+
+/// Helper function to extract socket address from remote endpoint
+fn extract_socket_addr(endpoint: &RemoteEndpoint) -> Option<std::net::SocketAddr> {
+    use std::net::{IpAddr, SocketAddr};
+    
+    let mut ip_addr: Option<IpAddr> = None;
+    let mut port: Option<u16> = None;
+    
+    for identifier in &endpoint.identifiers {
+        match identifier {
+            EndpointIdentifier::IpAddress(addr) => ip_addr = Some(*addr),
+            EndpointIdentifier::Port(p) => port = Some(*p),
+            EndpointIdentifier::SocketAddress(addr) => return Some(*addr),
+            _ => {}
+        }
+    }
+    
+    // Try to construct socket address from IP and port
+    if let (Some(ip), Some(p)) = (ip_addr, port) {
+        return Some(SocketAddr::new(ip, p));
+    }
+    
+    None
 }

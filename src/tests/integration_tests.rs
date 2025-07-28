@@ -529,3 +529,113 @@ async fn test_listener_connection_limit_integration() {
     
     listener.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_rendezvous_peer_to_peer() {
+    // Simulate two peers doing rendezvous
+    
+    // Peer A
+    let peer_a_local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let peer_a_remote = RemoteEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0) // Will be updated with peer B's actual port
+        .build();
+    
+    let preconn_a = new_preconnection(
+        vec![peer_a_local],
+        vec![peer_a_remote],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    // Start peer A rendezvous
+    let (conn_a, mut listener_a) = preconn_a.rendezvous().await.unwrap();
+    let addr_a = listener_a.local_addr().await.unwrap();
+    
+    // Peer B
+    let peer_b_local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let peer_b_remote = RemoteEndpoint::builder()
+        .socket_address(addr_a) // Connect to peer A
+        .build();
+    
+    let preconn_b = new_preconnection(
+        vec![peer_b_local],
+        vec![peer_b_remote],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    // Start peer B rendezvous
+    let (conn_b, listener_b) = preconn_b.rendezvous().await.unwrap();
+    
+    // Wait for connections to establish
+    let mut attempts = 0;
+    while (conn_a.state().await == ConnectionState::Establishing || 
+           conn_b.state().await == ConnectionState::Establishing) && attempts < 20 {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        attempts += 1;
+    }
+    
+    // At least one connection should be established
+    let a_established = conn_a.state().await == ConnectionState::Established;
+    let b_established = conn_b.state().await == ConnectionState::Established;
+    assert!(a_established || b_established, "At least one peer should establish connection");
+    
+    // Or accept incoming connection
+    if !a_established {
+        match tokio::time::timeout(Duration::from_millis(100), listener_a.accept()).await {
+            Ok(Ok(_)) => {
+                // Got incoming connection
+            }
+            _ => {}
+        }
+    }
+    
+    // Clean up
+    listener_a.stop().await.unwrap();
+    listener_b.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_rendezvous_with_transport_properties() {
+    let props = TransportProperties::builder()
+        .reliability(Preference::Require)
+        .connection_timeout(Duration::from_secs(2))
+        .build();
+    
+    let local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let remote = RemoteEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(54327) // Non-listening port
+        .build();
+    
+    let preconn = new_preconnection(
+        vec![local],
+        vec![remote],
+        props,
+        SecurityParameters::new_disabled(),
+    );
+    
+    let (connection, listener) = preconn.rendezvous().await.unwrap();
+    
+    // Verify listener is active
+    assert!(listener.is_active().await);
+    
+    // Verify connection has correct initial state
+    assert_eq!(connection.state().await, ConnectionState::Establishing);
+    
+    // Clean up
+    listener.stop().await.unwrap();
+}
