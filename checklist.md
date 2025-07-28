@@ -69,9 +69,9 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] This is a complex feature. Plan for a phased implementation, potentially starting with basic cases and later adding full NAT traversal (ICE-like) logic.
     - [x] Implement `Preconnection.Resolve()` to gather candidates.
     - [x] Emit `RendezvousDone` or `EstablishmentError` events.
-- [ ] Implement Connection Groups: `Connection.Clone()` (**RFC Section 7.4, Connection Groups**).
-    - [ ] Ensure shared properties are handled correctly between cloned connections.
-    - [ ] Investigate mapping to underlying multistreaming protocols like QUIC if available.
+- [x] Implement Connection Groups: `Connection.Clone()` (**RFC Section 7.4, Connection Groups**).
+    - [x] Ensure shared properties are handled correctly between cloned connections.
+    - [x] Investigate mapping to underlying multistreaming protocols like QUIC if available.
 
 ## Phase 3: Data Transfer (RFC Section 9, Data Transfer)
 
