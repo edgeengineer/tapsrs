@@ -46,7 +46,7 @@ async fn test_close_group_closes_all_connections() {
     // Wait for ready
     match conn1.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Clone to create connections in the same group
@@ -56,11 +56,11 @@ async fn test_close_group_closes_all_connections() {
     // Wait for all connections to be ready
     match conn2.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
     match conn3.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Verify all are in the same group
@@ -118,7 +118,7 @@ async fn test_abort_group_aborts_all_connections() {
     // Wait for ready
     match conn1.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Clone to create connection in the same group
@@ -127,7 +127,7 @@ async fn test_abort_group_aborts_all_connections() {
     // Wait for second connection to be ready
     match conn2.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Add some data to send buffers to verify they're cleared
@@ -145,7 +145,7 @@ async fn test_abort_group_aborts_all_connections() {
         Some(ConnectionEvent::ConnectionError(msg)) => {
             assert!(msg.contains("aborted"));
         }
-        other => panic!("Expected ConnectionError event, got {:?}", other),
+        other => panic!("Expected ConnectionError event, got {other:?}"),
     }
 
     // Verify all connections are closed
@@ -196,7 +196,7 @@ async fn test_close_group_on_ungrouped_connection() {
         // Wait for ready
         match conn.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Verify it's not grouped
@@ -208,7 +208,7 @@ async fn test_close_group_on_ungrouped_connection() {
         // Check for Closed event
         match conn.next_event().await {
             Some(ConnectionEvent::Closed) => {}
-            other => panic!("Expected Closed event, got {:?}", other),
+            other => panic!("Expected Closed event, got {other:?}"),
         }
 
         assert_eq!(conn.state().await, ConnectionState::Closed);
@@ -255,7 +255,7 @@ async fn test_abort_group_on_ungrouped_connection() {
         // Wait for ready
         match conn.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Verify it's not grouped
@@ -269,7 +269,7 @@ async fn test_abort_group_on_ungrouped_connection() {
             Some(ConnectionEvent::ConnectionError(msg)) => {
                 assert!(msg.contains("aborted"));
             }
-            other => panic!("Expected ConnectionError event, got {:?}", other),
+            other => panic!("Expected ConnectionError event, got {other:?}"),
         }
 
         assert_eq!(conn.state().await, ConnectionState::Closed);

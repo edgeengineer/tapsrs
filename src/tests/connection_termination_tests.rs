@@ -41,7 +41,7 @@ async fn create_test_connection() -> Connection {
     // Wait for ready
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     conn
@@ -59,7 +59,7 @@ async fn test_close_graceful_termination() {
         // Wait for sent event
         match conn.next_event().await {
             Some(ConnectionEvent::Sent { .. }) => {}
-            other => panic!("Expected Sent event, got {:?}", other),
+            other => panic!("Expected Sent event, got {other:?}"),
         }
 
         // Close gracefully
@@ -68,7 +68,7 @@ async fn test_close_graceful_termination() {
         // Should receive Closed event
         match conn.next_event().await {
             Some(ConnectionEvent::Closed) => {}
-            other => panic!("Expected Closed event, got {:?}", other),
+            other => panic!("Expected Closed event, got {other:?}"),
         }
 
         // Verify connection state
@@ -100,7 +100,7 @@ async fn test_abort_immediate_termination() {
             Some(ConnectionEvent::ConnectionError(msg)) => {
                 assert!(msg.contains("aborted"));
             }
-            other => panic!("Expected ConnectionError event, got {:?}", other),
+            other => panic!("Expected ConnectionError event, got {other:?}"),
         }
 
         // Verify connection state
@@ -121,7 +121,7 @@ async fn test_close_delivers_pending_messages() {
 
         // Send multiple messages
         for i in 0..5 {
-            let msg = Message::from_string(&format!("Message {}", i));
+            let msg = Message::from_string(&format!("Message {i}"));
             conn.send(msg).await.expect("Should send");
         }
 
@@ -138,7 +138,7 @@ async fn test_close_delivers_pending_messages() {
                 Some(ConnectionEvent::Closed) => {
                     break;
                 }
-                other => panic!("Unexpected event: {:?}", other),
+                other => panic!("Unexpected event: {other:?}"),
             }
         }
 
@@ -157,7 +157,7 @@ async fn test_abort_discards_pending_messages() {
         // Start a batch and add messages
         conn.start_batch().await.unwrap();
         for i in 0..5 {
-            let msg = Message::from_string(&format!("Pending {}", i));
+            let msg = Message::from_string(&format!("Pending {i}"));
             conn.send(msg).await.expect("Should add to batch");
         }
 
@@ -169,7 +169,7 @@ async fn test_abort_discards_pending_messages() {
             Some(ConnectionEvent::ConnectionError(msg)) => {
                 assert!(msg.contains("aborted"));
             }
-            other => panic!("Expected ConnectionError event, got {:?}", other),
+            other => panic!("Expected ConnectionError event, got {other:?}"),
         }
     })
     .await
@@ -187,7 +187,7 @@ async fn test_close_on_already_closed_connection() {
         // Wait for Closed event
         match conn.next_event().await {
             Some(ConnectionEvent::Closed) => {}
-            other => panic!("Expected Closed event, got {:?}", other),
+            other => panic!("Expected Closed event, got {other:?}"),
         }
 
         // Close again - should be no-op
@@ -211,7 +211,7 @@ async fn test_abort_on_already_closed_connection() {
         // Wait for Closed event
         match conn.next_event().await {
             Some(ConnectionEvent::Closed) => {}
-            other => panic!("Expected Closed event, got {:?}", other),
+            other => panic!("Expected Closed event, got {other:?}"),
         }
 
         // Abort after close - should be no-op
@@ -256,7 +256,7 @@ async fn test_remote_close_detection() {
         // Wait for ready
         match conn.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Wait for events from background reader
@@ -357,7 +357,7 @@ async fn test_termination_events_are_terminal() {
         // Get the Closed event
         match conn.next_event().await {
             Some(ConnectionEvent::Closed) => {}
-            other => panic!("Expected Closed event, got {:?}", other),
+            other => panic!("Expected Closed event, got {other:?}"),
         }
 
         // No more events should be generated
@@ -366,7 +366,7 @@ async fn test_termination_events_are_terminal() {
 
         tokio::select! {
             event = conn.next_event() => {
-                panic!("Should not receive any more events after Closed, got {:?}", event);
+                panic!("Should not receive any more events after Closed, got {event:?}");
             }
             _ = timeout => {
                 // Expected - no more events

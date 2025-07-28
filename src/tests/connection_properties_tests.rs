@@ -70,7 +70,7 @@ async fn test_connection_properties_defaults() {
     }
 
     if let Some(ConnectionProperty::IsolateSession(val)) = props.get("isolateSession") {
-        assert_eq!(*val, false); // Default
+        assert!(!(*val)); // Default
     } else {
         panic!("Default isolateSession not set");
     }
@@ -112,13 +112,13 @@ async fn test_readonly_properties() {
     }
 
     if let Some(ConnectionProperty::CanSend(val)) = props.get("canSend") {
-        assert_eq!(*val, true); // Can send when established
+        assert!(*val); // Can send when established
     } else {
         panic!("canSend not found");
     }
 
     if let Some(ConnectionProperty::CanReceive(val)) = props.get("canReceive") {
-        assert_eq!(*val, true); // Can receive when established
+        assert!(*val); // Can receive when established
     } else {
         panic!("canReceive not found");
     }

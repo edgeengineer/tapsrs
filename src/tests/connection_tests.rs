@@ -142,7 +142,7 @@ async fn test_connection_events() {
                     // Expected
                 }
                 ConnectionEvent::EstablishmentError(msg) => {
-                    panic!("Unexpected establishment error: {}", msg);
+                    panic!("Unexpected establishment error: {msg}");
                 }
                 _ => panic!("Unexpected event type"),
             }

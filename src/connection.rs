@@ -199,8 +199,7 @@ impl Connection {
                             {
                                 drop(inner);
                                 self.emit_soft_error(format!(
-                                    "Network error during flush: {}",
-                                    error_msg
+                                    "Network error during flush: {error_msg}"
                                 ))
                                 .await;
                             }
@@ -222,7 +221,7 @@ impl Connection {
                         || error_msg.contains("connection refused")
                     {
                         drop(inner);
-                        self.emit_soft_error(format!("Network error during send: {}", error_msg))
+                        self.emit_soft_error(format!("Network error during send: {error_msg}"))
                             .await;
                     }
 
@@ -426,8 +425,7 @@ impl Connection {
                                 || error_msg.contains("timed out")
                             {
                                 self.emit_soft_error(format!(
-                                    "Network error during receive: {}",
-                                    error_msg
+                                    "Network error during receive: {error_msg}"
                                 ))
                                 .await;
                             }
@@ -766,8 +764,7 @@ impl Connection {
                 let _ = self
                     .event_sender
                     .send(ConnectionEvent::EstablishmentError(format!(
-                        "Failed to connect: {}",
-                        e
+                        "Failed to connect: {e}"
                     )));
                 Err(TransportServicesError::EstablishmentFailed(e.to_string()))
             }
@@ -861,7 +858,7 @@ impl Connection {
                         TimeoutValue::Duration(duration) => {
                             // TCP connection timeout is handled at the application level
                             // Store for future operations
-                            log::debug!("Connection timeout set to {:?}", duration);
+                            log::debug!("Connection timeout set to {duration:?}");
                         }
                         TimeoutValue::Disabled => {
                             log::debug!("Connection timeout disabled");
@@ -890,15 +887,15 @@ impl Connection {
                                         .with_interval(*duration);
 
                                     if let Err(e) = socket.set_tcp_keepalive(&keepalive) {
-                                        log::warn!("Failed to set TCP keep-alive: {}", e);
+                                        log::warn!("Failed to set TCP keep-alive: {e}");
                                     } else {
-                                        log::debug!("TCP keep-alive set to {:?}", duration);
+                                        log::debug!("TCP keep-alive set to {duration:?}");
                                     }
                                 }
                                 TimeoutValue::Disabled => {
                                     // Disable keep-alive
                                     if let Err(e) = socket.set_keepalive(false) {
-                                        log::warn!("Failed to disable TCP keep-alive: {}", e);
+                                        log::warn!("Failed to disable TCP keep-alive: {e}");
                                     } else {
                                         log::debug!("TCP keep-alive disabled");
                                     }
@@ -924,7 +921,7 @@ impl Connection {
                     if let ConnectionProperty::TcpUserTimeoutEnabled(enabled) = &value {
                         // Note: Actually setting TCP_USER_TIMEOUT socket option would require
                         // platform-specific code and may not be available on all platforms
-                        log::debug!("TCP User Timeout enabled: {}", enabled);
+                        log::debug!("TCP User Timeout enabled: {enabled}");
                     }
                 }
             }
@@ -934,7 +931,7 @@ impl Connection {
                     if let ConnectionProperty::TcpUserTimeoutValue(Some(duration)) = &value {
                         // Note: Actually setting TCP_USER_TIMEOUT socket option would require
                         // platform-specific code and may not be available on all platforms
-                        log::debug!("TCP User Timeout value set to: {:?}", duration);
+                        log::debug!("TCP User Timeout value set to: {duration:?}");
                     }
                 }
             }
@@ -1277,10 +1274,9 @@ impl Connection {
                 Ok(mss) => Ok(mss as usize),
                 Err(e) => {
                     // Log the error but don't fail
-                    log::debug!("Failed to get TCP MSS: {}", e);
+                    log::debug!("Failed to get TCP MSS: {e}");
                     Err(TransportServicesError::NotSupported(format!(
-                        "Failed to get TCP MSS: {}",
-                        e
+                        "Failed to get TCP MSS: {e}"
                     )))
                 }
             }

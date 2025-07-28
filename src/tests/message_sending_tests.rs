@@ -61,7 +61,7 @@ async fn test_basic_message_send() {
         Some(ConnectionEvent::Sent { message_id }) => {
             assert!(message_id.is_some());
         }
-        _ => panic!("Expected Sent event, got: {:?}", event),
+        _ => panic!("Expected Sent event, got: {event:?}"),
     }
 
     conn.close().await.unwrap();
@@ -115,7 +115,7 @@ async fn test_message_with_id() {
         Some(ConnectionEvent::Sent { message_id }) => {
             assert_eq!(message_id, Some(42));
         }
-        _ => panic!("Expected Sent event, got: {:?}", event),
+        _ => panic!("Expected Sent event, got: {event:?}"),
     }
 
     conn.close().await.unwrap();
@@ -224,7 +224,7 @@ async fn test_message_batching() {
 
     // Send multiple messages
     for i in 0..5 {
-        let msg = Message::from_string(&format!("Batch message {}", i));
+        let msg = Message::from_string(&format!("Batch message {i}"));
         conn.send(msg).await.unwrap();
     }
 
@@ -305,7 +305,7 @@ async fn test_message_expiry() {
         Ok(Some(ConnectionEvent::Expired { message_id })) => {
             assert_eq!(message_id, Some(99));
         }
-        Ok(other) => panic!("Expected Expired event, got: {:?}", other),
+        Ok(other) => panic!("Expected Expired event, got: {other:?}"),
         Err(_) => panic!("Timeout waiting for Expired event"),
     }
 

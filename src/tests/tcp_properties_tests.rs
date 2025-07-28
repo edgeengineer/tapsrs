@@ -28,7 +28,7 @@ async fn create_test_connection() -> Connection {
     // Wait for ready
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     conn
@@ -323,7 +323,7 @@ async fn test_tcp_properties_group_synchronization() {
         // Wait for ready
         match conn1.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Clone to create connection in the same group
@@ -332,7 +332,7 @@ async fn test_tcp_properties_group_synchronization() {
         // Wait for clone to be ready
         match conn2.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Set TCP property on first connection

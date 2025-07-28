@@ -28,7 +28,7 @@ async fn create_test_connection() -> Connection {
     // Wait for ready
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     conn
@@ -468,7 +468,7 @@ async fn test_isolate_session_property() {
         if let Some(ConnectionProperty::IsolateSession(isolated)) =
             conn.get_property("isolateSession").await
         {
-            assert_eq!(isolated, true);
+            assert!(isolated);
         } else {
             panic!("Property not found");
         }
@@ -481,7 +481,7 @@ async fn test_isolate_session_property() {
         if let Some(ConnectionProperty::IsolateSession(isolated)) =
             conn.get_property("isolateSession").await
         {
-            assert_eq!(isolated, false);
+            assert!(!isolated);
         } else {
             panic!("Property not found");
         }
@@ -574,7 +574,7 @@ async fn test_all_properties_defaults() {
         }
 
         if let Some(ConnectionProperty::IsolateSession(isolated)) = props.get("isolateSession") {
-            assert_eq!(*isolated, false); // Default is false
+            assert!(!(*isolated)); // Default is false
         } else {
             panic!("isolateSession not found");
         }

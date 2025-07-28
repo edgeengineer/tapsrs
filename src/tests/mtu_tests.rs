@@ -30,7 +30,7 @@ async fn test_tcp_mss_query() {
     // Wait for connection to be established
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Get properties
@@ -43,9 +43,9 @@ async fn test_tcp_mss_query() {
         // MSS should be reasonable
         // Note: Loopback interfaces often have very large MSS (16K+)
         // Regular networks typically have MSS between 500-9000
-        assert!(*mss >= 500, "MSS too small: {}", mss);
-        assert!(*mss <= 65535, "MSS exceeds maximum possible value: {}", mss);
-        println!("TCP MSS: {} bytes", mss);
+        assert!(*mss >= 500, "MSS too small: {mss}");
+        assert!(*mss <= 65535, "MSS exceeds maximum possible value: {mss}");
+        println!("TCP MSS: {mss} bytes");
 
         // Check if this looks like a loopback MSS
         if *mss > 9000 {

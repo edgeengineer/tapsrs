@@ -60,26 +60,26 @@ impl fmt::Display for TransportServicesError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TransportServicesError::EstablishmentFailed(msg) => {
-                write!(f, "Connection establishment failed: {}", msg)
+                write!(f, "Connection establishment failed: {msg}")
             }
             TransportServicesError::ConnectionFailed(msg) => {
-                write!(f, "Connection failed: {}", msg)
+                write!(f, "Connection failed: {msg}")
             }
-            TransportServicesError::SendFailed(msg) => write!(f, "Send failed: {}", msg),
-            TransportServicesError::ReceiveFailed(msg) => write!(f, "Receive failed: {}", msg),
-            TransportServicesError::CloneFailed(msg) => write!(f, "Clone failed: {}", msg),
+            TransportServicesError::SendFailed(msg) => write!(f, "Send failed: {msg}"),
+            TransportServicesError::ReceiveFailed(msg) => write!(f, "Receive failed: {msg}"),
+            TransportServicesError::CloneFailed(msg) => write!(f, "Clone failed: {msg}"),
             TransportServicesError::MessageExpired => write!(f, "Message expired before sending"),
             TransportServicesError::InvalidParameters(msg) => {
-                write!(f, "Invalid parameters: {}", msg)
+                write!(f, "Invalid parameters: {msg}")
             }
-            TransportServicesError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
-            TransportServicesError::SecurityError(msg) => write!(f, "Security error: {}", msg),
-            TransportServicesError::Io(err) => write!(f, "I/O error: {}", err),
+            TransportServicesError::InvalidState(msg) => write!(f, "Invalid state: {msg}"),
+            TransportServicesError::SecurityError(msg) => write!(f, "Security error: {msg}"),
+            TransportServicesError::Io(err) => write!(f, "I/O error: {err}"),
             TransportServicesError::NotSupported(msg) => {
-                write!(f, "Operation not supported: {}", msg)
+                write!(f, "Operation not supported: {msg}")
             }
             TransportServicesError::Timeout => write!(f, "Operation timed out"),
-            TransportServicesError::MessageTooLarge(msg) => write!(f, "Message too large: {}", msg),
+            TransportServicesError::MessageTooLarge(msg) => write!(f, "Message too large: {msg}"),
         }
     }
 }

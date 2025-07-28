@@ -79,11 +79,11 @@ impl Listener {
         // Start TCP listener
         let tcp_listener = TcpListener::bind(bind_addr)
             .await
-            .map_err(|e| TransportServicesError::Io(e))?;
+            .map_err(TransportServicesError::Io)?;
 
         let actual_addr = tcp_listener
             .local_addr()
-            .map_err(|e| TransportServicesError::Io(e))?;
+            .map_err(TransportServicesError::Io)?;
 
         // Update local address
         drop(inner);
@@ -215,7 +215,7 @@ impl Listener {
                 }
                 Some(ListenerEvent::Error(e)) => {
                     // Continue listening after non-fatal errors
-                    eprintln!("Listener error: {}", e);
+                    eprintln!("Listener error: {e}");
                 }
                 None => {
                     return Err(TransportServicesError::InvalidState(

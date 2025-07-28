@@ -28,7 +28,7 @@ async fn create_test_connection() -> Connection {
     // Wait for ready
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     conn
@@ -155,7 +155,7 @@ async fn test_unidirectional_send_connection() {
         // Wait for ready
         match conn.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Check that we can send but not receive
@@ -213,7 +213,7 @@ async fn test_unidirectional_receive_connection() {
         // Wait for ready
         match conn.next_event().await {
             Some(ConnectionEvent::Ready) => {}
-            other => panic!("Expected Ready event, got {:?}", other),
+            other => panic!("Expected Ready event, got {other:?}"),
         }
 
         // Check that we can receive but not send
@@ -401,8 +401,7 @@ async fn test_readonly_properties_cannot_be_set() {
             let result = conn.set_property(key, value).await;
             assert!(
                 result.is_err(),
-                "Should not be able to set read-only property: {}",
-                key
+                "Should not be able to set read-only property: {key}"
             );
             if let Err(e) = result {
                 match e {

@@ -70,8 +70,8 @@ async fn test_connection_clone_basic() {
 
     // If counts don't match expectations, print debug info
     if count1 != Some(2) || count2 != Some(2) {
-        eprintln!("Connection 1 group count: {:?}", count1);
-        eprintln!("Connection 2 group count: {:?}", count2);
+        eprintln!("Connection 1 group count: {count1:?}");
+        eprintln!("Connection 2 group count: {count2:?}");
         eprintln!("Connection 1 grouped: {}", conn1.is_grouped().await);
         eprintln!("Connection 2 grouped: {}", conn2.is_grouped().await);
     }

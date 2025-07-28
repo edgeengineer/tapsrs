@@ -31,7 +31,7 @@ async fn test_group_wide_property_update() {
     // Wait for ready
     match conn1.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Clone to create connections in the same group
@@ -41,11 +41,11 @@ async fn test_group_wide_property_update() {
     // Wait for clones to be ready
     match conn2.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
     match conn3.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Set a property that should be shared across the group
@@ -118,7 +118,7 @@ async fn test_conn_priority_not_shared() {
     // Wait for ready
     match conn1.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Clone to create connection in the same group
@@ -127,7 +127,7 @@ async fn test_conn_priority_not_shared() {
     // Wait for clone to be ready
     match conn2.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Set different priorities on each connection
@@ -184,7 +184,7 @@ async fn test_keepalive_timeout_setting() {
     // Wait for ready
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Set keep-alive timeout

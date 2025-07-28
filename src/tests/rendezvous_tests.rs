@@ -109,7 +109,7 @@ async fn test_rendezvous_resolve() {
     // First test resolve directly
     let (locals, remotes) = preconn.resolve().await.unwrap();
     assert!(locals.len() >= 2); // Should have IPv4 and IPv6
-    assert!(remotes.len() >= 1); // Should have resolved localhost
+    assert!(!remotes.is_empty()); // Should have resolved localhost
 
     // Now test rendezvous
     let result = preconn.rendezvous().await;

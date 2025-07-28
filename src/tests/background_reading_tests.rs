@@ -41,7 +41,7 @@ async fn test_background_reading_receives_messages() {
     // Wait for ready event
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Collect received events
@@ -115,7 +115,7 @@ async fn test_background_reading_with_framing() {
     // Wait for ready event
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Enable length-prefix framing
@@ -176,7 +176,7 @@ async fn test_background_reading_handles_connection_close() {
     // Wait for ready event
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Collect events
@@ -247,7 +247,7 @@ async fn test_background_reading_concurrent_with_receive() {
     // Wait for ready event
     match conn.next_event().await {
         Some(ConnectionEvent::Ready) => {}
-        other => panic!("Expected Ready event, got {:?}", other),
+        other => panic!("Expected Ready event, got {other:?}"),
     }
 
     // Clone connection for concurrent operations

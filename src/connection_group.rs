@@ -11,6 +11,12 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConnectionGroupId(Uuid);
 
+impl Default for ConnectionGroupId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionGroupId {
     /// Create a new unique connection group ID
     pub fn new() -> Self {

@@ -685,31 +685,32 @@ pub struct MessageProperties {
 
 /// Multipath configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MultipathConfig {
+    #[default]
     Disabled,
     Active,
     Passive,
 }
 
-impl Default for MultipathConfig {
-    fn default() -> Self {
-        MultipathConfig::Disabled
-    }
-}
 
 /// Communication direction
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum CommunicationDirection {
+    #[default]
     Bidirectional,
     UnidirectionalSend,
     UnidirectionalReceive,
 }
 
-impl Default for CommunicationDirection {
-    fn default() -> Self {
-        CommunicationDirection::Bidirectional
-    }
-}
+/// Type alias for trust verification callback
+#[cfg(not(feature = "ffi"))]
+pub type TrustVerificationCallback = Box<dyn Fn(&CertificateChain) -> bool + Send + Sync>;
+
+/// Type alias for identity challenge callback
+#[cfg(not(feature = "ffi"))]
+pub type IdentityChallengeCallback = Box<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
 
 /// Security parameters for connections
 pub struct SecurityParameters {
@@ -729,9 +730,9 @@ pub struct SecurityParameters {
     // Callbacks are stored as Option<Box<dyn Fn>> in Rust
     // For FFI, we'll use function pointers
     #[cfg(not(feature = "ffi"))]
-    pub trust_verification_callback: Option<Box<dyn Fn(&CertificateChain) -> bool + Send + Sync>>,
+    pub trust_verification_callback: Option<TrustVerificationCallback>,
     #[cfg(not(feature = "ffi"))]
-    pub identity_challenge_callback: Option<Box<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>>,
+    pub identity_challenge_callback: Option<IdentityChallengeCallback>,
 }
 
 impl SecurityParameters {

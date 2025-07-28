@@ -217,7 +217,7 @@ impl Preconnection {
             // For now, use blocking resolver in a spawn_blocking task
             // In production, we'd want to use trust-dns or similar async resolver
             use std::net::ToSocketAddrs;
-            let addr_string = format!("{}:{}", host, p);
+            let addr_string = format!("{host}:{p}");
 
             match addr_string.to_socket_addrs() {
                 Ok(mut addrs) => {
@@ -227,8 +227,7 @@ impl Preconnection {
                 }
                 Err(e) => {
                     return Err(TransportServicesError::InvalidParameters(format!(
-                        "Failed to resolve hostname: {}",
-                        e
+                        "Failed to resolve hostname: {e}"
                     )));
                 }
             }
@@ -393,7 +392,7 @@ impl Preconnection {
 
                     if let Some(port) = port {
                         use std::net::ToSocketAddrs;
-                        let addr_string = format!("{}:{}", hostname, port);
+                        let addr_string = format!("{hostname}:{port}");
 
                         if let Ok(addrs) = addr_string.to_socket_addrs() {
                             for addr in addrs {
@@ -404,7 +403,7 @@ impl Preconnection {
 
                                 resolved_remotes.push(RemoteEndpoint {
                                     identifiers: new_identifiers,
-                                    protocol: resolved.protocol.clone(),
+                                    protocol: resolved.protocol,
                                 });
                             }
                             continue;

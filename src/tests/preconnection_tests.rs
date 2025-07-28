@@ -86,7 +86,7 @@ async fn test_preconnection_builder_pattern() {
     let (locals, remotes) = preconn.resolve().await.unwrap();
     assert_eq!(locals.len(), 1);
     // Remote endpoint with hostname may resolve to multiple IPs
-    assert!(remotes.len() >= 1);
+    assert!(!remotes.is_empty());
 }
 
 #[tokio::test]

@@ -85,8 +85,10 @@ pub enum ConnectionProperty {
 
 /// Checksum coverage specification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ChecksumCoverage {
     /// Full message coverage
+    #[default]
     FullCoverage,
     /// Minimum number of bytes to be covered
     MinBytes(usize),
@@ -94,8 +96,10 @@ pub enum ChecksumCoverage {
 
 /// Timeout value specification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum TimeoutValue {
     /// Timeout is disabled
+    #[default]
     Disabled,
     /// Timeout duration
     Duration(Duration),
@@ -103,8 +107,10 @@ pub enum TimeoutValue {
 
 /// Connection scheduler types (8.1.5)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum SchedulerType {
     /// Weighted Fair Queueing (default)
+    #[default]
     WeightedFairQueueing,
     /// First-In-First-Out
     Fifo,
@@ -116,8 +122,10 @@ pub enum SchedulerType {
 
 /// Capacity profile types (8.1.6)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum CapacityProfile {
     /// Default (Best Effort)
+    #[default]
     Default,
     /// Low Latency/Interactive
     LowLatencyInteractive,
@@ -131,8 +139,10 @@ pub enum CapacityProfile {
 
 /// Multipath policy types (8.1.7)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MultipathPolicy {
     /// Use only a single path at a time, failover when needed
+    #[default]
     Handover,
     /// Simultaneously use multiple paths when possible
     Active,
@@ -140,35 +150,10 @@ pub enum MultipathPolicy {
     Redundant,
 }
 
-impl Default for ChecksumCoverage {
-    fn default() -> Self {
-        ChecksumCoverage::FullCoverage
-    }
-}
 
-impl Default for TimeoutValue {
-    fn default() -> Self {
-        TimeoutValue::Disabled
-    }
-}
 
-impl Default for SchedulerType {
-    fn default() -> Self {
-        SchedulerType::WeightedFairQueueing
-    }
-}
 
-impl Default for CapacityProfile {
-    fn default() -> Self {
-        CapacityProfile::Default
-    }
-}
 
-impl Default for MultipathPolicy {
-    fn default() -> Self {
-        MultipathPolicy::Handover
-    }
-}
 
 /// Storage for connection properties
 #[derive(Debug, Clone, Default)]
@@ -259,8 +244,7 @@ impl ConnectionProperties {
             | "sendMsgMaxLen"
             | "recvMsgMaxLen" => {
                 return Err(crate::TransportServicesError::InvalidParameters(format!(
-                    "Property '{}' is read-only",
-                    key
+                    "Property '{key}' is read-only"
                 )));
             }
             _ => {}

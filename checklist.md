@@ -178,26 +178,39 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [ ] An Android Archive (AAR) that includes the `.so` files for different Android ABIs.
     - [ ] A NuGet package for Windows developers.
 - [ ] Provide comprehensive documentation and examples for using the library on each target platform.
-- [ ] **FFI Async/Await Integration Assessment and Improvements**:
-    - [ ] **Current FFI Status**: The existing C-FFI is **~80% sufficient** for building ergonomic Swift and C# async/await APIs
-    - [ ] **What Works Well**:
-        - [ ] Callback-based operations (e.g., `transport_services_connection_send`) with user_data context - ideal for async/await bridging
-        - [ ] Connection initiation with both success and error callbacks
-        - [ ] Event polling system that can be wrapped in async streams
-        - [ ] Comprehensive error codes and message handling
-    - [ ] **Critical Missing Pieces**:
-        - [ ] **Add async receive operations**: Implement `transport_services_connection_receive(handle, message_callback, error_callback, user_data)` 
-        - [ ] **Add listener connection callbacks**: Implement `transport_services_listener_set_connection_callback()` for asynchronous new connection notifications
-        - [ ] **Convert sync-only operations**: Make `transport_services_connection_close()` callback-based for proper async handling
-    - [ ] **FFI Runtime Optimizations** (Optional but Recommended):
-        - [ ] Replace per-call `tokio::runtime::Runtime::new()` with single shared runtime using `lazy_static` or `std::sync::OnceLock`
-        - [ ] Replace `std::thread::spawn` + `block_on` pattern with proper future handling
-        - [ ] Add cancellation token support for long-running operations
-    - [ ] **Language-Specific Wrapper Implementation**:
-        - [ ] **Swift Integration**: Use `withCheckedThrowingContinuation` to bridge C callbacks to Swift async/await
-        - [ ] **C# Integration**: Use `TaskCompletionSource<T>` and `GCHandle` to bridge C callbacks to C# async/await  
-        - [ ] Both languages can cleanly wrap the callback + user_data pattern into native async/await APIs
-    - [ ] **Alternative Architecture** (Future Consideration):
-        - [ ] Consider future-based FFI layer that returns opaque future handles instead of callbacks
-        - [ ] Implement `transport_services_future_await()` for direct async integration
-        - [ ] Add stream-based event handling for real-time event consumption
+- [ ] **Phase 5.1: FFI Enhancements for Cross-Platform Async Bindings**
+    - [ ] **Goal**: Refine the C-FFI to provide a robust foundation for creating ergonomic, `async/await`-native wrappers in Swift, C#, and Python.
+    - [ ] **High-Level Strategy**:
+        - [ ] Maintain a pure `extern "C"` API as the stable, core interface.
+        - [ ] Implement language-specific wrapper libraries (Swift Package, NuGet, Python Wheel) that translate the C-FFI into idiomatic async patterns for each language.
+    - [ ] **Core FFI Architectural Improvements**:
+        - [ ] **Centralize Tokio Runtime**:
+            - [ ] Implement `transport_services_init_runtime()` to create a single, shared, multi-threaded Tokio runtime.
+            - [ ] Implement `transport_services_shutdown_runtime()` to gracefully shut down the shared runtime.
+            - [ ] Refactor all FFI functions to use the shared runtime instead of creating new runtimes and threads per call. This eliminates major performance bottlenecks and potential deadlocks.
+        - [ ] **Adopt a Consistent Async Pattern**:
+            - [ ] Ensure all operations that perform I/O are non-blocking and use callbacks.
+            - [ ] The standard pattern should be: `function(..., callback, user_data)`, where `user_data` is a pointer passed back to the callback, allowing wrappers to manage state.
+    - [ ] **Specific FFI Function Modifications and Additions**:
+        - [ ] **Connection API**:
+            - [ ] **Add Async Receive**: Implement `transport_services_connection_receive(handle: *mut Handle, message_callback: fn(*const Message), error_callback: fn(Error), user_data: *mut c_void)`. This is the most critical missing piece for async data handling.
+            - [ ] **Make Close Async**: Change `transport_services_connection_close` to `transport_services_connection_close_async(handle, callback, user_data)` to properly signal when the graceful close is complete.
+        - [ ] **Listener API**:
+            - [ ] **Add Connection Callback**: Implement `transport_services_listener_set_callbacks(handle, connection_received_callback, error_callback, user_data)` to handle incoming connections asynchronously instead of requiring polling.
+            - [ ] **Make Stop Async**: Change `transport_services_listener_stop` to `transport_services_listener_stop_async(handle, callback, user_data)`.
+        - [ ] **Event Handling**:
+            - [ ] **Replace Polling with Callbacks**: Deprecate `transport_services_connection_poll_event`.
+            - [ ] **Implement Event Callback Setter**: Add `transport_services_connection_set_event_callback(handle, event_callback, user_data)` to push events like `PathChange`, `Closed`, etc., to the client.
+    - [ ] **Guidance for Language-Specific Wrappers**:
+        - [ ] **Swift Wrapper (Swift Package)**:
+            - [ ] Use `withCheckedThrowingContinuation` to wrap callback-based functions into `async throws` methods.
+            - [ ] Use `AsyncStream` to wrap the event and listener callbacks, providing an idiomatic way to iterate over events and incoming connections (`for await event in connection.events`).
+            - [ ] Manage object lifetimes with `Unmanaged` and a custom `Deinit` class.
+        - [ ] **C# Wrapper (NuGet Package)**:
+            - [ ] Use `TaskCompletionSource<T>` to bridge C callbacks to `Task`-based `async/await`.
+            - [ ] Use `IAsyncEnumerable<T>` and `yield return` to expose event streams.
+            - [ ] Manage callback delegates and context with `GCHandle`.
+        - [ ] **Python Wrapper (PyO3/CFFI Wheel)**:
+            - [ ] Use `cffi` or `ctypes` for C interop.
+            - [ ] Bridge C callbacks to `asyncio` by using `asyncio.Future` and `loop.call_soon_threadsafe` to safely interact with the event loop from the FFI callback thread.
+            - [ ] Expose async iterators (`async for`) for event streams.

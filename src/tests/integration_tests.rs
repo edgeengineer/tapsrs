@@ -76,7 +76,7 @@ async fn test_multiple_connections() {
             assert_eq!(conn.state().await, ConnectionState::Established);
 
             // Send unique message
-            let msg = Message::from_string(&format!("Connection {}", i));
+            let msg = Message::from_string(&format!("Connection {i}"));
             conn.send(msg).await.unwrap();
 
             connections.push(conn);
@@ -271,18 +271,14 @@ async fn test_hostname_resolution() {
             .ok()
             .flatten()
         {
-            match event {
-                ConnectionEvent::EstablishmentError(msg) => {
-                    // Expected if localhost resolution fails
-                    println!("Hostname resolution test skipped: {}", msg);
-                    return; // Test passes - we handled the error correctly
-                }
-                _ => {}
+            if let ConnectionEvent::EstablishmentError(msg) = event {
+                // Expected if localhost resolution fails
+                println!("Hostname resolution test skipped: {msg}");
+                return; // Test passes - we handled the error correctly
             }
         }
         panic!(
-            "Connection failed to establish (state: {:?}) and no error event received",
-            final_state
+            "Connection failed to establish (state: {final_state:?}) and no error event received"
         );
     }
 
@@ -494,7 +490,7 @@ async fn test_listener_multiple_clients() {
 
     // Send messages from server to each client
     for (i, conn) in server_conns.iter().enumerate() {
-        let msg = Message::from_string(&format!("Hello client {}", i));
+        let msg = Message::from_string(&format!("Hello client {i}"));
         conn.send(msg).await.unwrap();
     }
 
@@ -626,11 +622,8 @@ async fn test_rendezvous_peer_to_peer() {
 
     // Or accept incoming connection
     if !a_established {
-        match tokio::time::timeout(Duration::from_millis(100), listener_a.accept()).await {
-            Ok(Ok(_)) => {
-                // Got incoming connection
-            }
-            _ => {}
+        if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_millis(100), listener_a.accept()).await {
+            // Got incoming connection
         }
     }
 
@@ -735,7 +728,7 @@ async fn test_message_properties_integration() {
 
     // Ordered transaction messages
     for i in 0..3 {
-        let txn = Message::builder(format!("Transaction {}", i).into_bytes())
+        let txn = Message::builder(format!("Transaction {i}").into_bytes())
             .ordered(true)
             .reliable(true)
             .safely_replayable(false)
