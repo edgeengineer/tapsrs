@@ -103,7 +103,7 @@ pub unsafe extern "C" fn transport_services_preconnection_add_remote_endpoint(
 #[no_mangle]
 pub unsafe extern "C" fn transport_services_preconnection_set_transport_properties(
     handle: *mut TransportServicesHandle,
-    properties: *const types::TransportServicesTransportProperties,
+    properties: *const types::TransportServicesProperties,
 ) -> types::TransportServicesError {
     if handle.is_null() || properties.is_null() {
         return types::TransportServicesError::InvalidParameters;

@@ -48,7 +48,7 @@ pub struct TransportServicesEndpoint {
 
 /// FFI representation of transport properties
 #[repr(C)]
-pub struct TransportServicesTransportProperties {
+pub struct TransportServicesProperties {
     pub reliability: TransportServicesPreference,
     pub preserve_msg_boundaries: TransportServicesPreference,
     pub preserve_order: TransportServicesPreference,
@@ -58,7 +58,7 @@ pub struct TransportServicesTransportProperties {
 
 /// FFI representation of security parameters
 #[repr(C)]
-pub struct TransportServicesSecurityParameters {
+pub struct TransportServicesSecurityParams {
     pub disabled: bool,
     pub opportunistic: bool,
     pub server_certificate: *const c_void,
