@@ -156,9 +156,9 @@ This document outlines the phases and steps required to implement the TAPS (Tran
         - [x] `tcp.userTimeoutValue` - Advertised User Timeout (**8.2.1, Advertised User Timeout**)
         - [x] `tcp.userTimeoutEnabled` - User Timeout Enabled (**8.2.2, User Timeout Enabled**)
         - [x] `tcp.userTimeoutChangeable` - Timeout Changeable (**8.2.3, Timeout Changeable**)
-- [ ] Implement Connection Lifecycle Events via the event callback system (**RFC Section 8.3, Connection Lifecycle Events**):
-    - [ ] `SoftError` (**8.3.1, Soft Errors**)
-    - [ ] `PathChange` (**8.3.2, Path Change**)
+- [x] Implement Connection Lifecycle Events via the event callback system (**RFC Section 8.3, Connection Lifecycle Events**):
+    - [x] `SoftError` (**8.3.1, Soft Errors**)
+    - [x] `PathChange` (**8.3.2, Path Change**)
 - [ ] Implement Connection Termination actions (**RFC Section 10, Connection Termination**):
     - [ ] `Connection.Close()`
     - [ ] `Connection.Abort()`
