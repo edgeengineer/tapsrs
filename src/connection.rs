@@ -391,13 +391,41 @@ impl Connection {
                     group.remove_connection();
                 }
                 
-                // TODO: Implement graceful close
+                // Send any pending batched messages before closing
+                let batched_messages = inner.batched_messages.drain(..).collect::<Vec<_>>();
+                
+                // Perform graceful close on TCP stream
+                if let Some(ref mut stream) = inner.tcp_stream {
+                    // Flush any buffered data
+                    let _ = stream.flush().await;
+                    
+                    // Shutdown the write side to signal we're done sending
+                    // This sends a TCP FIN packet
+                    let _ = stream.shutdown().await;
+                }
+                
+                // Drop the write lock to send batched messages
+                drop(inner);
+                
+                // Send any remaining batched messages
+                for message in batched_messages {
+                    let _ = self.send_message_internal(message).await;
+                }
+                
+                // Re-acquire lock to update state
+                let mut inner = self.inner.write().await;
                 inner.state = ConnectionState::Closed;
+                
+                // Clear any remaining state
+                inner.pending_messages.clear();
+                inner.receive_buffer.clear();
+                inner.tcp_stream = None;
+                
                 let _ = self.event_sender.send(ConnectionEvent::Closed);
                 Ok(())
             }
             ConnectionState::Closing => {
-                // Wait for close to complete
+                // Already closing, just wait
                 Ok(())
             }
             ConnectionState::Closed => Ok(()), // Already closed
@@ -405,22 +433,44 @@ impl Connection {
     }
 
     /// Abort the connection immediately
+    /// RFC Section 10 - Connection Termination
+    /// 
+    /// Unlike close(), abort() immediately terminates the connection without
+    /// attempting to deliver any outstanding data.
     pub async fn abort(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         
-        // Only decrement if we're moving from a non-closed state
+        // Only proceed if we're not already closed
         let was_not_closed = inner.state != ConnectionState::Closed;
-        inner.state = ConnectionState::Closed;
-        
-        // If this connection is part of a group and wasn't already closed
-        if was_not_closed {
-            if let Some(ref group) = inner.connection_group {
-                group.remove_connection();
-            }
+        if !was_not_closed {
+            return Ok(());
         }
         
-        let _ = self.event_sender.send(ConnectionEvent::Closed);
-        // TODO: Implement immediate abort
+        // Immediately set state to Closed
+        inner.state = ConnectionState::Closed;
+        
+        // Force close the TCP stream if it exists
+        if let Some(stream) = inner.tcp_stream.take() {
+            // Drop the stream to force immediate closure
+            // This will send a TCP RST instead of graceful FIN
+            drop(stream);
+        }
+        
+        // Clear any pending messages since we're aborting
+        inner.pending_messages.clear();
+        inner.batched_messages.clear();
+        inner.receive_buffer.clear();
+        
+        // If this connection is part of a group, decrement the connection count
+        if let Some(ref group) = inner.connection_group {
+            group.remove_connection();
+        }
+        
+        // Send ConnectionError event for abort (as per RFC Section 10)
+        let _ = self.event_sender.send(ConnectionEvent::ConnectionError(
+            "Connection aborted".to_string()
+        ));
+        
         Ok(())
     }
 
