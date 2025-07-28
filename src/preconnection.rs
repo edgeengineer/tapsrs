@@ -4,6 +4,7 @@
 use crate::{
     LocalEndpoint, RemoteEndpoint, TransportProperties, SecurityParameters,
     Connection, Listener, Result, TransportServicesError, EndpointIdentifier,
+    Message,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,6 +144,28 @@ impl Preconnection {
         tokio::spawn(async move {
             let _ = conn_clone.establish_tcp(socket_addr, connection_timeout).await;
         });
+        
+        Ok(connection)
+    }
+    
+    /// Initiate an active connection and send a message
+    /// RFC Section 9.2.5: Send on Active Open: InitiateWithSend
+    pub async fn initiate_with_send(&self, message: Message) -> Result<Connection> {
+        let connection = self.initiate().await?;
+        
+        // Queue the message to be sent once established
+        connection.send(message).await?;
+        
+        Ok(connection)
+    }
+    
+    /// Initiate an active connection with timeout and send a message
+    /// RFC Section 9.2.5: Send on Active Open: InitiateWithSend
+    pub async fn initiate_with_send_timeout(&self, message: Message, timeout: Option<Duration>) -> Result<Connection> {
+        let connection = self.initiate_with_timeout(timeout).await?;
+        
+        // Queue the message to be sent once established
+        connection.send(message).await?;
         
         Ok(connection)
     }

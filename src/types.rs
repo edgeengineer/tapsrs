@@ -939,6 +939,15 @@ pub enum ConnectionEvent {
     PathChange,
     SoftError(String),
     Closed,
+    /// Message was successfully sent
+    /// RFC Section 9.2.2.1
+    Sent { message_id: Option<u64> },
+    /// Message expired before it could be sent  
+    /// RFC Section 9.2.2.2
+    Expired { message_id: Option<u64> },
+    /// Error occurred while sending
+    /// RFC Section 9.2.2.3
+    SendError { message_id: Option<u64>, error: String },
 }
 
 /// Event types that can be emitted during rendezvous

@@ -3,6 +3,8 @@
 
 use crate::{MessageProperties, LocalEndpoint, RemoteEndpoint};
 use std::time::{Duration, Instant};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// A Message is the unit of data transfer in TAPS
 #[derive(Debug, Clone)]
@@ -15,6 +17,39 @@ pub struct Message {
     
     /// Optional message identifier
     id: Option<u64>,
+    
+    /// Whether this message completes the application-layer message
+    /// RFC Section 9.2.3: Partial Sends
+    end_of_message: bool,
+    
+    /// Optional context for sending
+    send_context: Option<SendContext>,
+}
+
+/// Context for sending messages
+#[derive(Debug, Clone)]
+pub struct SendContext {
+    /// Expiry time for the message
+    pub expiry: Option<Instant>,
+    
+    /// Whether to bundle this message with others
+    pub bundle: bool,
+    
+    /// Event notifier for send completion
+    pub completion_notifier: Option<Arc<mpsc::UnboundedSender<SendEvent>>>,
+}
+
+/// Events related to message sending
+#[derive(Debug, Clone)]
+pub enum SendEvent {
+    /// Message was successfully sent
+    Sent { message_id: Option<u64> },
+    
+    /// Message expired before it could be sent
+    Expired { message_id: Option<u64> },
+    
+    /// An error occurred while sending
+    SendError { message_id: Option<u64>, error: String },
 }
 
 impl Message {
@@ -24,6 +59,8 @@ impl Message {
             data,
             properties: MessageProperties::default(),
             id: None,
+            end_of_message: true,
+            send_context: None,
         }
     }
 
@@ -106,6 +143,39 @@ impl Message {
     /// Get message ID
     pub fn id(&self) -> Option<u64> {
         self.id
+    }
+    
+    /// Set whether this message completes the application message
+    /// RFC Section 9.2.3: Partial Sends
+    pub fn with_end_of_message(mut self, end_of_message: bool) -> Self {
+        self.end_of_message = end_of_message;
+        self
+    }
+    
+    /// Check if this message completes the application message
+    pub fn is_end_of_message(&self) -> bool {
+        self.end_of_message
+    }
+    
+    /// Set send context
+    pub fn with_send_context(mut self, context: SendContext) -> Self {
+        self.send_context = Some(context);
+        self
+    }
+    
+    /// Get send context
+    pub fn send_context(&self) -> Option<&SendContext> {
+        self.send_context.as_ref()
+    }
+    
+    /// Take send context (consumes it)
+    pub fn take_send_context(&mut self) -> Option<SendContext> {
+        self.send_context.take()
+    }
+    
+    /// Create a partial message (not end of message)
+    pub fn partial(data: Vec<u8>) -> Self {
+        Self::new(data).with_end_of_message(false)
     }
 }
 

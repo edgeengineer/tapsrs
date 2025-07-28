@@ -7,8 +7,9 @@ use crate::{
     EndpointIdentifier, ConnectionGroup, ConnectionGroupId,
 };
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
@@ -35,6 +36,11 @@ struct ConnectionInner {
     pending_messages: Vec<Message>,
     // Connection group this connection belongs to
     connection_group: Option<Arc<ConnectionGroup>>,
+    // Batching state
+    batch_mode: bool,
+    batched_messages: Vec<Message>,
+    // Message ID counter
+    next_message_id: Arc<AtomicU64>,
 }
 
 impl Clone for Connection {
@@ -64,6 +70,9 @@ impl Connection {
                 tcp_stream: None,
                 pending_messages: Vec::new(),
                 connection_group: None,
+                batch_mode: false,
+                batched_messages: Vec::new(),
+                next_message_id: Arc::new(AtomicU64::new(1)),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -90,6 +99,9 @@ impl Connection {
                 tcp_stream: None,
                 pending_messages: Vec::new(),
                 connection_group: None,
+                batch_mode: false,
+                batched_messages: Vec::new(),
+                next_message_id: Arc::new(AtomicU64::new(1)),
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -104,21 +116,38 @@ impl Connection {
 
     /// Send a message on the connection
     /// RFC Section 9.2
-    pub async fn send(&self, message: Message) -> Result<()> {
+    pub async fn send(&self, mut message: Message) -> Result<()> {
+        // Assign message ID if not already set
+        if message.id().is_none() {
+            let id = self.get_next_message_id().await;
+            message = message.with_id(id);
+        }
+        
+        // Check if message has expired
+        if let Some(context) = message.send_context() {
+            if let Some(expiry) = context.expiry {
+                if Instant::now() >= expiry {
+                    // Notify about expiration
+                    let _ = self.event_sender.send(ConnectionEvent::Expired { 
+                        message_id: message.id() 
+                    });
+                    return Err(TransportServicesError::MessageExpired);
+                }
+            }
+        }
+        
         let mut inner = self.inner.write().await;
         
         match inner.state {
             ConnectionState::Established => {
-                if let Some(ref mut stream) = inner.tcp_stream {
-                    stream.write_all(message.data()).await
-                        .map_err(|e| TransportServicesError::SendFailed(e.to_string()))?;
-                    stream.flush().await
-                        .map_err(|e| TransportServicesError::SendFailed(e.to_string()))?;
+                if inner.batch_mode {
+                    // Add to batch
+                    inner.batched_messages.push(message);
                     Ok(())
                 } else {
-                    Err(TransportServicesError::InvalidState(
-                        "No active stream".to_string()
-                    ))
+                    // Send immediately
+                    drop(inner);
+                    self.send_message_internal(message).await
                 }
             }
             ConnectionState::Establishing => {
@@ -130,6 +159,79 @@ impl Connection {
                 "Cannot send on a closed connection".to_string()
             )),
         }
+    }
+    
+    /// Internal method to actually send a message
+    async fn send_message_internal(&self, message: Message) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        
+        if let Some(ref mut stream) = inner.tcp_stream {
+            let message_id = message.id();
+            let event_sender = self.event_sender.clone();
+            
+            // Send the message
+            match stream.write_all(message.data()).await {
+                Ok(_) => {
+                    match stream.flush().await {
+                        Ok(_) => {
+                            // Notify successful send
+                            let _ = event_sender.send(ConnectionEvent::Sent { 
+                                message_id 
+                            });
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let _ = event_sender.send(ConnectionEvent::SendError { 
+                                message_id,
+                                error: e.to_string()
+                            });
+                            Err(TransportServicesError::SendFailed(e.to_string()))
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = event_sender.send(ConnectionEvent::SendError { 
+                        message_id,
+                        error: e.to_string()
+                    });
+                    Err(TransportServicesError::SendFailed(e.to_string()))
+                }
+            }
+        } else {
+            Err(TransportServicesError::InvalidState(
+                "No active stream".to_string()
+            ))
+        }
+    }
+    
+    /// Start batching messages
+    /// RFC Section 9.2.4
+    pub async fn start_batch(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.batch_mode = true;
+        Ok(())
+    }
+    
+    /// End batching and send all batched messages
+    /// RFC Section 9.2.4
+    pub async fn end_batch(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.batch_mode = false;
+        let messages = inner.batched_messages.drain(..).collect::<Vec<_>>();
+        drop(inner);
+        
+        // Send all batched messages
+        for message in messages {
+            self.send_message_internal(message).await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Get the next message ID
+    async fn get_next_message_id(&self) -> u64 {
+        let inner = self.inner.read().await;
+        inner.next_message_id.fetch_add(1, Ordering::SeqCst)
     }
 
     /// Receive messages from the connection
@@ -315,7 +417,8 @@ impl Connection {
                 drop(inner); // Release lock before sending
                 
                 for msg in pending {
-                    self.send(msg).await?;
+                    // Use send_message_internal to avoid re-queuing
+                    self.send_message_internal(msg).await?;
                 }
                 
                 // Signal Ready event

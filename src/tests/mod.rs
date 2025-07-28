@@ -16,4 +16,7 @@ mod listener_tests;
 mod rendezvous_tests;
 
 #[cfg(test)]
+mod message_sending_tests;
+
+#[cfg(test)]
 mod integration_tests;
