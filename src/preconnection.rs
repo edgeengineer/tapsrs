@@ -210,9 +210,11 @@ impl Preconnection {
             ));
         }
 
-        // TODO: Implement actual listener creation
-        // For now, return a placeholder
-        Ok(Listener::new(self.clone()))
+        // Create and start the listener
+        let listener = Listener::new(self.clone());
+        listener.start().await?;
+        
+        Ok(listener)
     }
 
     /// Rendezvous for peer-to-peer connections
@@ -254,5 +256,11 @@ impl Preconnection {
             inner.local_endpoints.clone(),
             inner.remote_endpoints.clone(),
         ))
+    }
+    
+    /// Get transport properties (for internal use)
+    pub(crate) async fn transport_properties(&self) -> TransportProperties {
+        let inner = self.inner.read().await;
+        inner.transport_properties.clone()
     }
 }

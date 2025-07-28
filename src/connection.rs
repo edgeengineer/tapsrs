@@ -305,4 +305,21 @@ impl Connection {
             let _ = self.event_sender.send(ConnectionEvent::Ready);
         }
     }
+    
+    // Internal method to set TCP stream (for listener)
+    pub(crate) async fn set_tcp_stream(&mut self, stream: TcpStream) {
+        let mut inner = self.inner.write().await;
+        inner.tcp_stream = Some(stream);
+        inner.state = ConnectionState::Established;
+        drop(inner);
+        let _ = self.event_sender.send(ConnectionEvent::Ready);
+    }
+}
+
+impl std::fmt::Debug for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connection")
+            .field("state", &"<async>")
+            .finish()
+    }
 }

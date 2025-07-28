@@ -3,7 +3,7 @@
 use crate::*;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Start a test server that accepts connections and handles simple protocols
@@ -312,4 +312,220 @@ async fn test_protocol_specific_endpoint() {
     conn.send(request).await.unwrap();
     
     conn.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_listener_accept_connection() {
+    // Create a listener
+    let local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let preconn = new_preconnection(
+        vec![local],
+        vec![],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    let mut listener = preconn.listen().await.unwrap();
+    let listen_addr = listener.local_addr().await.unwrap();
+    
+    // Connect from client with short timeout
+    let client_handle = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        TcpStream::connect(listen_addr).await.unwrap()
+    });
+    
+    // Accept connection with timeout
+    let accept_result = tokio::time::timeout(
+        Duration::from_millis(100),
+        listener.accept()
+    ).await;
+    
+    assert!(accept_result.is_ok());
+    let conn = accept_result.unwrap().unwrap();
+    assert_eq!(conn.state().await, ConnectionState::Established);
+    
+    // Clean up
+    let _ = client_handle.await;
+    conn.close().await.unwrap();
+    listener.stop().await.unwrap();
+}
+
+#[tokio::test] 
+async fn test_client_server_data_exchange() {
+    // Create a listener
+    let local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let server_preconn = new_preconnection(
+        vec![local],
+        vec![],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    let mut listener = server_preconn.listen().await.unwrap();
+    let listen_addr = listener.local_addr().await.unwrap();
+    
+    // Server accept loop
+    let server_handle = tokio::spawn(async move {
+        let conn = listener.accept().await.unwrap();
+        
+        // Send a response
+        let msg = Message::from_string("Hello from server");
+        conn.send(msg).await.unwrap();
+        
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        conn.close().await.unwrap();
+        listener.stop().await.unwrap();
+    });
+    
+    // Client connection
+    let remote = RemoteEndpoint::builder()
+        .ip_address(listen_addr.ip())
+        .port(listen_addr.port())
+        .build();
+    
+    let client_preconn = new_preconnection(
+        vec![],
+        vec![remote],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    let client_conn = client_preconn.initiate_with_timeout(
+        Some(Duration::from_millis(100))
+    ).await.unwrap();
+    
+    // Wait for establishment
+    let mut attempts = 0;
+    while client_conn.state().await == ConnectionState::Establishing && attempts < 10 {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        attempts += 1;
+    }
+    
+    assert_eq!(client_conn.state().await, ConnectionState::Established);
+    
+    // Send from client
+    let msg = Message::from_string("Hello from client");
+    client_conn.send(msg).await.unwrap();
+    
+    client_conn.close().await.unwrap();
+    let _ = server_handle.await;
+}
+
+#[tokio::test]
+async fn test_listener_multiple_clients() {
+    let local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let preconn = new_preconnection(
+        vec![local],
+        vec![],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    let mut listener = preconn.listen().await.unwrap();
+    let listen_addr = listener.local_addr().await.unwrap();
+    
+    // Spawn multiple clients
+    let mut client_handles = vec![];
+    for i in 0..3 {
+        let addr = listen_addr;
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10 * (i + 1))).await;
+            TcpStream::connect(addr).await.unwrap()
+        });
+        client_handles.push(handle);
+    }
+    
+    // Accept all connections
+    let mut server_conns = vec![];
+    for _ in 0..3 {
+        let conn = tokio::time::timeout(
+            Duration::from_millis(200),
+            listener.accept()
+        ).await.unwrap().unwrap();
+        
+        assert_eq!(conn.state().await, ConnectionState::Established);
+        server_conns.push(conn);
+    }
+    
+    // Send messages from server to each client
+    for (i, conn) in server_conns.iter().enumerate() {
+        let msg = Message::from_string(&format!("Hello client {}", i));
+        conn.send(msg).await.unwrap();
+    }
+    
+    // Clean up
+    for handle in client_handles {
+        let _ = handle.await;
+    }
+    
+    for conn in server_conns {
+        conn.close().await.unwrap();
+    }
+    
+    listener.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_listener_connection_limit_integration() {
+    let local = LocalEndpoint::builder()
+        .ip_address("127.0.0.1".parse().unwrap())
+        .port(0)
+        .build();
+    
+    let preconn = new_preconnection(
+        vec![local],
+        vec![],
+        TransportProperties::default(),
+        SecurityParameters::new_disabled(),
+    );
+    
+    let mut listener = preconn.listen().await.unwrap();
+    let listen_addr = listener.local_addr().await.unwrap();
+    
+    // Set connection limit to 2
+    listener.set_new_connection_limit(2);
+    
+    // Spawn 3 clients
+    let mut client_handles = vec![];
+    for i in 0..3 {
+        let addr = listen_addr;
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10 * (i + 1))).await;
+            TcpStream::connect(addr).await
+        });
+        client_handles.push(handle);
+    }
+    
+    // Try to accept 3 connections - only 2 should succeed
+    let mut accepted = 0;
+    for _ in 0..3 {
+        match tokio::time::timeout(
+            Duration::from_millis(50),
+            listener.accept()
+        ).await {
+            Ok(Ok(_)) => accepted += 1,
+            _ => break,
+        }
+    }
+    
+    assert_eq!(accepted, 2);
+    
+    // Clean up
+    for handle in client_handles {
+        let _ = handle.await;
+    }
+    
+    listener.stop().await.unwrap();
 }
