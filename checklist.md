@@ -84,16 +84,16 @@ This document outlines the phases and steps required to implement the TAPS (Tran
     - [x] `Sent` (**9.2.2.1, Sent**)
     - [x] `Expired` (**9.2.2.2, Expired**)
     - [x] `SendError` (**9.2.2.3, SendError**)
-- [ ] Implement Message Properties (**RFC Section 9.1.3, Message Properties**):
-    - [ ] `msgLifetime` (**9.1.3.1, Lifetime**)
-    - [ ] `msgPriority` (**9.1.3.2, Priority**)
-    - [ ] `msgOrdered` (**9.1.3.3, Ordered**)
-    - [ ] `safelyReplayable` (**9.1.3.4, Safely Replayable**)
-    - [ ] `final` (**9.1.3.5, Final**)
-    - [ ] `msgChecksumLen` (**9.1.3.6, Sending Corruption Protection Length**)
-    - [ ] `msgReliable` (**9.1.3.7, Reliable Data Transfer (Message)**)
-    - [ ] `msgCapacityProfile` (**9.1.3.8, Message Capacity Profile Override**)
-    - [ ] `noFragmentation` / `noSegmentation` (**9.1.3.9, No Network-Layer Fragmentation**, **9.1.3.10, No Segmentation**)
+- [x] Implement Message Properties (**RFC Section 9.1.3, Message Properties**):
+    - [x] `msgLifetime` (**9.1.3.1, Lifetime**)
+    - [x] `msgPriority` (**9.1.3.2, Priority**)
+    - [x] `msgOrdered` (**9.1.3.3, Ordered**)
+    - [x] `safelyReplayable` (**9.1.3.4, Safely Replayable**)
+    - [x] `final` (**9.1.3.5, Final**)
+    - [x] `msgChecksumLen` (**9.1.3.6, Sending Corruption Protection Length**)
+    - [x] `msgReliable` (**9.1.3.7, Reliable Data Transfer (Message)**)
+    - [x] `msgCapacityProfile` (**9.1.3.8, Message Capacity Profile Override**)
+    - [x] `noFragmentation` / `noSegmentation` (**9.1.3.9, No Network-Layer Fragmentation**, **9.1.3.10, No Segmentation**)
 - [ ] Implement Message Receiving: `Connection.Receive()` (**RFC Section 9.3.1, Enqueuing Receives**).
     - [ ] Handle `minIncompleteLength` and `maxLength` parameters to manage buffering.
 - [ ] Implement Receive Events via the event callback system (**RFC Section 9.3.2, Receive Events**):
