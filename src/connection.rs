@@ -4,7 +4,7 @@
 use crate::{
     Preconnection, ConnectionState, ConnectionEvent, Message, MessageContext,
     TransportProperties, LocalEndpoint, RemoteEndpoint, Result, TransportServicesError,
-    EndpointIdentifier,
+    EndpointIdentifier, ConnectionGroup, ConnectionGroupId,
 };
 use std::sync::Arc;
 use std::net::SocketAddr;
@@ -33,17 +33,23 @@ struct ConnectionInner {
     tcp_stream: Option<TcpStream>,
     // Message queue for messages sent before connection is established
     pending_messages: Vec<Message>,
+    // Connection group this connection belongs to
+    connection_group: Option<Arc<ConnectionGroup>>,
 }
 
-impl Connection {
-    /// Clone the connection for internal use
-    pub(crate) fn clone(&self) -> Self {
+impl Clone for Connection {
+    fn clone(&self) -> Self {
+        // When cloning a Connection, we don't want to affect the connection count
+        // This is just cloning the handle, not creating a new connection
         Self {
             inner: Arc::clone(&self.inner),
             event_sender: self.event_sender.clone(),
             event_receiver: Arc::clone(&self.event_receiver),
         }
     }
+}
+
+impl Connection {
     /// Create a new Connection (internal use)
     pub(crate) fn new(preconnection: Preconnection, state: ConnectionState) -> Self {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
@@ -57,6 +63,7 @@ impl Connection {
                 transport_properties: TransportProperties::default(),
                 tcp_stream: None,
                 pending_messages: Vec::new(),
+                connection_group: None,
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -82,6 +89,7 @@ impl Connection {
                 transport_properties,
                 tcp_stream: None,
                 pending_messages: Vec::new(),
+                connection_group: None,
             })),
             event_sender,
             event_receiver: Arc::new(RwLock::new(event_receiver)),
@@ -148,19 +156,40 @@ impl Connection {
         match inner.state {
             ConnectionState::Established | ConnectionState::Establishing => {
                 inner.state = ConnectionState::Closing;
+                
+                // If this connection is part of a group, decrement the connection count
+                if let Some(ref group) = inner.connection_group {
+                    group.remove_connection();
+                }
+                
                 // TODO: Implement graceful close
                 inner.state = ConnectionState::Closed;
                 let _ = self.event_sender.send(ConnectionEvent::Closed);
                 Ok(())
             }
-            _ => Ok(()), // Already closed
+            ConnectionState::Closing => {
+                // Wait for close to complete
+                Ok(())
+            }
+            ConnectionState::Closed => Ok(()), // Already closed
         }
     }
 
     /// Abort the connection immediately
     pub async fn abort(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
+        
+        // Only decrement if we're moving from a non-closed state
+        let was_not_closed = inner.state != ConnectionState::Closed;
         inner.state = ConnectionState::Closed;
+        
+        // If this connection is part of a group and wasn't already closed
+        if was_not_closed {
+            if let Some(ref group) = inner.connection_group {
+                group.remove_connection();
+            }
+        }
+        
         let _ = self.event_sender.send(ConnectionEvent::Closed);
         // TODO: Implement immediate abort
         Ok(())
@@ -173,8 +202,49 @@ impl Connection {
         
         match inner.state {
             ConnectionState::Established => {
-                // Create a new connection using the same preconnection
-                inner.preconnection.initiate().await
+                // Get or create connection group
+                let (group, was_not_grouped) = if let Some(ref group) = inner.connection_group {
+                    (Arc::clone(group), false)
+                } else {
+                    // Create a new connection group for this connection
+                    let new_group = Arc::new(ConnectionGroup::new(
+                        inner.transport_properties.clone(),
+                        inner.local_endpoint.as_ref().map(|e| vec![e.clone()]).unwrap_or_default(),
+                        inner.remote_endpoint.as_ref().map(|e| vec![e.clone()]).unwrap_or_default(),
+                    ));
+                    (new_group, true)
+                };
+                
+                // Get preconnection before dropping inner
+                let preconn = inner.preconnection.clone();
+                drop(inner);
+                
+                // Update the original connection to be part of the group if it wasn't already
+                if was_not_grouped {
+                    let mut inner_mut = self.inner.write().await;
+                    inner_mut.connection_group = Some(Arc::clone(&group));
+                    drop(inner_mut);
+                    // Add the original connection to the group
+                    group.add_connection();
+                }
+                
+                // Create a new connection in the same group
+                let new_conn = preconn.initiate().await?;
+                
+                // Set the connection group on the new connection
+                {
+                    let mut new_inner = new_conn.inner.write().await;
+                    new_inner.connection_group = Some(Arc::clone(&group));
+                    
+                    // Share transport properties from the group
+                    let shared_props = group.transport_properties.read().await;
+                    new_inner.transport_properties = shared_props.clone();
+                }
+                
+                // Increment connection count for the new connection
+                group.add_connection();
+                
+                Ok(new_conn)
             }
             _ => Err(TransportServicesError::InvalidState(
                 "Can only clone established connections".to_string()
@@ -294,6 +364,39 @@ impl Connection {
         // TODO: Implement property getting
         Ok(None)
     }
+    
+    /// Get the connection group ID if this connection is part of a group
+    pub async fn connection_group_id(&self) -> Option<ConnectionGroupId> {
+        let inner = self.inner.read().await;
+        inner.connection_group.as_ref().map(|g| g.id)
+    }
+    
+    /// Check if this connection is part of a connection group
+    pub async fn is_grouped(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.connection_group.is_some()
+    }
+    
+    /// Get the number of connections in this connection's group
+    pub async fn group_connection_count(&self) -> Option<u64> {
+        let inner = self.inner.read().await;
+        inner.connection_group.as_ref().map(|g| g.connection_count())
+    }
+    
+    /// Close all connections in the group
+    /// RFC Section 10
+    pub async fn close_group(&self) -> Result<()> {
+        // TODO: Implement group-wide close
+        // For now, just close this connection
+        self.close().await
+    }
+    
+    /// Abort all connections in the group
+    pub async fn abort_group(&self) -> Result<()> {
+        // TODO: Implement group-wide abort
+        // For now, just abort this connection
+        self.abort().await
+    }
 
     // Internal method to update state
     #[allow(dead_code)]
@@ -323,3 +426,7 @@ impl std::fmt::Debug for Connection {
             .finish()
     }
 }
+
+// Note: We don't implement Drop for Connection because Connection can be cloned
+// (it's just a handle to the actual connection). The connection count should only
+// be decremented when the actual connection is closed, not when a handle is dropped.

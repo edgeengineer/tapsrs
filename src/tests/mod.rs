@@ -4,6 +4,9 @@
 mod connection_tests;
 
 #[cfg(test)]
+mod connection_group_tests;
+
+#[cfg(test)]
 mod preconnection_tests;
 
 #[cfg(test)]
