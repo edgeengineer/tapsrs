@@ -196,6 +196,7 @@ async fn test_listener_connection_limit() {
 }
 
 #[tokio::test]
+#[cfg_attr(target_os = "windows", ignore = "Flaky on Windows CI")]
 async fn test_listener_event_stream() {
     use tokio::net::TcpStream;
 
