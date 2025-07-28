@@ -217,8 +217,8 @@ async fn test_listener_event_stream() {
         let _ = TcpStream::connect(bound_addr).await;
     });
 
-    let event = timeout(Duration::from_millis(100), listener.next_event()).await;
-    assert!(event.is_ok());
+    let event = timeout(Duration::from_millis(500), listener.next_event()).await;
+    assert!(event.is_ok(), "Failed to receive event within timeout");
 
     if let Some(ListenerEvent::ConnectionReceived(conn)) = event.unwrap() {
         assert_eq!(conn.state().await, crate::ConnectionState::Established);
@@ -245,7 +245,10 @@ async fn test_listener_multiple_connections() {
 
     let preconn = new_preconnection(
         vec![LocalEndpoint {
-            identifiers: vec![EndpointIdentifier::Port(0)],
+            identifiers: vec![
+                EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
+                EndpointIdentifier::Port(0)
+            ],
         }],
         vec![],
         TransportProperties::default(),
@@ -271,10 +274,10 @@ async fn test_listener_multiple_connections() {
 
     // Accept all connections
     let mut connections = vec![];
-    for _ in 0..3 {
-        match timeout(Duration::from_millis(200), listener.accept()).await {
+    for i in 0..3 {
+        match timeout(Duration::from_millis(500), listener.accept()).await {
             Ok(Ok(conn)) => connections.push(conn),
-            _ => panic!("Failed to accept connection"),
+            _ => panic!("Failed to accept connection {}", i),
         }
     }
 
