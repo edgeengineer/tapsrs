@@ -375,9 +375,7 @@ async fn test_send_on_closed_connection() {
 
     let preconn = new_preconnection(
         vec![],
-        vec![RemoteEndpoint::builder()
-            .socket_address(addr)
-            .build()],
+        vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
         SecurityParameters::default(),
     );
@@ -386,7 +384,7 @@ async fn test_send_on_closed_connection() {
 
     // Wait for ready event
     match conn.next_event().await {
-        Some(ConnectionEvent::Ready) => {},
+        Some(ConnectionEvent::Ready) => {}
         _ => panic!("Expected Ready event"),
     }
 

@@ -247,7 +247,7 @@ async fn test_listener_multiple_connections() {
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
-                EndpointIdentifier::Port(0)
+                EndpointIdentifier::Port(0),
             ],
         }],
         vec![],
