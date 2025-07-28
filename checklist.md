@@ -108,17 +108,17 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 - [x] Implement Connection Property management (**RFC Section 8.1, Generic Connection Properties**):
     - [x] `Connection.SetProperty()` and `Connection.GetProperties()` methods.
-    - [ ] Implement settable generic connection properties:
-        - [ ] `recvChecksumLen` - Required Minimum Corruption Protection Coverage for Receiving (**8.1.1, Required Minimum Corruption Protection Coverage for Receiving**)
-        - [ ] `connPriority` - Connection Priority (**8.1.2, Connection Priority**)
-        - [ ] `connTimeout` - Timeout for Aborting Connection (**8.1.3, Timeout for Aborting Connection**)
-        - [ ] `keepAliveTimeout` - Timeout for Keep-Alive Packets (**8.1.4, Timeout for Keep-Alive Packets**)
-        - [ ] `connScheduler` - Connection Group Transmission Scheduler (**8.1.5, Connection Group Transmission Scheduler**)
-        - [ ] `connCapacityProfile` - Capacity Profile (**8.1.6, Capacity Profile**)
-        - [ ] `multipathPolicy` - Policy for Using Multipath Transports (**8.1.7, Policy for Using Multipath Transports**)
-        - [ ] `minSendRate` / `minRecvRate` / `maxSendRate` / `maxRecvRate` - Bounds on Send or Receive Rate (**8.1.8, Bounds on Send or Receive Rate**)
-        - [ ] `groupConnLimit` - Group Connection Limit (**8.1.9, Group Connection Limit**)
-        - [ ] `isolateSession` - Isolate Session (**8.1.10, Isolate Session**)
+    - [x] Implement settable generic connection properties:
+        - [x] `recvChecksumLen` - Required Minimum Corruption Protection Coverage for Receiving (**8.1.1, Required Minimum Corruption Protection Coverage for Receiving**)
+        - [x] `connPriority` - Connection Priority (**8.1.2, Connection Priority**)
+        - [x] `connTimeout` - Timeout for Aborting Connection (**8.1.3, Timeout for Aborting Connection**)
+        - [x] `keepAliveTimeout` - Timeout for Keep-Alive Packets (**8.1.4, Timeout for Keep-Alive Packets**)
+        - [x] `connScheduler` - Connection Group Transmission Scheduler (**8.1.5, Connection Group Transmission Scheduler**)
+        - [x] `connCapacityProfile` - Capacity Profile (**8.1.6, Capacity Profile**)
+        - [x] `multipathPolicy` - Policy for Using Multipath Transports (**8.1.7, Policy for Using Multipath Transports**)
+        - [x] `minSendRate` / `minRecvRate` / `maxSendRate` / `maxRecvRate` - Bounds on Send or Receive Rate (**8.1.8, Bounds on Send or Receive Rate**)
+        - [x] `groupConnLimit` - Group Connection Limit (**8.1.9, Group Connection Limit**)
+        - [x] `isolateSession` - Isolate Session (**8.1.10, Isolate Session**)
     - [ ] Implement read-only generic connection properties (**RFC Section 8.1.11, Read-Only Connection Properties**):
         - [ ] `connState` - Connection State (**8.1.11.1, Connection State**)
         - [ ] `canSend` - Can Send Data (**8.1.11.2, Can Send Data**)

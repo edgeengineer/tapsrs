@@ -37,4 +37,7 @@ mod group_termination_tests;
 mod property_updates_tests;
 
 #[cfg(test)]
+mod settable_properties_tests;
+
+#[cfg(test)]
 mod integration_tests;
