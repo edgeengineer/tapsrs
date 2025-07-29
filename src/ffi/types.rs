@@ -254,3 +254,15 @@ pub type TransportServicesErrorCallback =
     extern "C" fn(error: TransportServicesError, message: *const c_char, user_data: *mut c_void);
 pub type TransportServicesMessageCallback =
     extern "C" fn(message: *const TransportServicesMessage, user_data: *mut c_void);
+pub type TransportServicesReceiveCallback = extern "C" fn(
+    message: *const TransportServicesMessage,
+    context: *const c_void,
+    user_data: *mut c_void,
+);
+pub type TransportServicesCompletionCallback =
+    extern "C" fn(error: TransportServicesError, user_data: *mut c_void);
+pub type TransportServicesEventCallback = extern "C" fn(
+    event_type: TransportServicesConnectionEventType,
+    message: *const c_char,
+    user_data: *mut c_void,
+);

@@ -105,7 +105,152 @@ pub unsafe extern "C" fn transport_services_connection_send(
     types::TransportServicesError::Success
 }
 
-/// Close a connection gracefully
+/// Receive messages asynchronously on a connection
+#[no_mangle]
+pub unsafe extern "C" fn transport_services_connection_receive(
+    handle: *mut TransportServicesHandle,
+    message_callback: types::TransportServicesReceiveCallback,
+    error_callback: types::TransportServicesErrorCallback,
+    user_data: *mut c_void,
+) -> types::TransportServicesError {
+    if handle.is_null() {
+        return types::TransportServicesError::InvalidParameters;
+    }
+
+    let conn = handle_ref::<Connection>(handle);
+    let conn_clone = conn.clone();
+
+    // Wrap user_data in a type that is Send
+    struct CallbackData {
+        message_callback: types::TransportServicesReceiveCallback,
+        error_callback: types::TransportServicesErrorCallback,
+        user_data: usize,
+    }
+
+    let callback_data = CallbackData {
+        message_callback,
+        error_callback,
+        user_data: user_data as usize,
+    };
+
+    // Spawn async task to handle receive using the global runtime
+    match runtime::spawn(async move {
+        // Start receiving messages in a loop
+        loop {
+            match conn_clone.next_event().await {
+                Some(ConnectionEvent::Received { message, context }) => {
+                    // Convert message to FFI format
+                    let ffi_message = types::TransportServicesMessage {
+                        data: message.data().as_ptr(),
+                        length: message.data().len(),
+                        lifetime_ms: message.lifetime().as_millis() as u64,
+                        priority: message.priority(),
+                        idempotent: message.is_safely_replayable(),
+                        final_message: message.is_final(),
+                    };
+
+                    // Call the message callback
+                    (callback_data.message_callback)(
+                        &ffi_message,
+                        std::ptr::null(), // context not implemented yet
+                        callback_data.user_data as *mut c_void,
+                    );
+                }
+                Some(ConnectionEvent::ReceivedPartial { data, is_end, .. }) => {
+                    // For partial messages, accumulate or handle differently
+                    // For now, just treat as complete message
+                    let ffi_message = types::TransportServicesMessage {
+                        data: data.as_ptr(),
+                        length: data.len(),
+                        lifetime_ms: 0,
+                        priority: 0,
+                        idempotent: false,
+                        final_message: is_end,
+                    };
+
+                    (callback_data.message_callback)(
+                        &ffi_message,
+                        std::ptr::null(),
+                        callback_data.user_data as *mut c_void,
+                    );
+                }
+                Some(ConnectionEvent::ReceiveError { error }) => {
+                    error::set_last_error(&error);
+                    (callback_data.error_callback)(
+                        types::TransportServicesError::ReceiveFailed,
+                        error::transport_services_get_last_error(),
+                        callback_data.user_data as *mut c_void,
+                    );
+                }
+                Some(ConnectionEvent::Closed) => {
+                    // Connection closed, stop receiving
+                    break;
+                }
+                _ => {
+                    // Ignore other events
+                    continue;
+                }
+            }
+        }
+    }) {
+        Ok(_) => types::TransportServicesError::Success,
+        Err(e) => {
+            error::set_last_error_string(&e);
+            types::TransportServicesError::RuntimeError
+        }
+    }
+}
+
+/// Close a connection gracefully (async)
+#[no_mangle]
+pub unsafe extern "C" fn transport_services_connection_close_async(
+    handle: *mut TransportServicesHandle,
+    callback: types::TransportServicesCompletionCallback,
+    user_data: *mut c_void,
+) -> types::TransportServicesError {
+    if handle.is_null() {
+        return types::TransportServicesError::InvalidParameters;
+    }
+
+    let conn = handle_ref::<Connection>(handle);
+    let conn_clone = conn.clone();
+
+    // Wrap user_data in a type that is Send
+    struct CallbackData {
+        callback: types::TransportServicesCompletionCallback,
+        user_data: usize,
+    }
+
+    let callback_data = CallbackData {
+        callback,
+        user_data: user_data as usize,
+    };
+
+    // Spawn async task to handle close using the global runtime
+    match runtime::spawn(async move {
+        match conn_clone.close().await {
+            Ok(()) => {
+                (callback_data.callback)(
+                    types::TransportServicesError::Success,
+                    callback_data.user_data as *mut c_void,
+                );
+            }
+            Err(e) => {
+                error::set_last_error(&e);
+                let error_code = types::TransportServicesError::from(e);
+                (callback_data.callback)(error_code, callback_data.user_data as *mut c_void);
+            }
+        }
+    }) {
+        Ok(_) => types::TransportServicesError::Success,
+        Err(e) => {
+            error::set_last_error_string(&e);
+            types::TransportServicesError::RuntimeError
+        }
+    }
+}
+
+/// Close a connection gracefully (blocking version for backward compatibility)
 #[no_mangle]
 pub unsafe extern "C" fn transport_services_connection_close(
     handle: *mut TransportServicesHandle,
@@ -165,7 +310,116 @@ pub type TransportServicesConnectionEventCallback = extern "C" fn(
     user_data: *mut c_void,
 );
 
-/// Poll for the next event on a connection (non-blocking)
+/// Set event callback for a connection
+#[no_mangle]
+pub unsafe extern "C" fn transport_services_connection_set_event_callback(
+    handle: *mut TransportServicesHandle,
+    event_callback: types::TransportServicesEventCallback,
+    user_data: *mut c_void,
+) -> types::TransportServicesError {
+    if handle.is_null() {
+        return types::TransportServicesError::InvalidParameters;
+    }
+
+    let conn = handle_ref::<Connection>(handle);
+    let conn_clone = conn.clone();
+
+    // Wrap user_data in a type that is Send
+    struct CallbackData {
+        event_callback: types::TransportServicesEventCallback,
+        user_data: usize,
+    }
+
+    let callback_data = CallbackData {
+        event_callback,
+        user_data: user_data as usize,
+    };
+
+    // Spawn async task to handle events using the global runtime
+    match runtime::spawn(async move {
+        // Start receiving events in a loop
+        loop {
+            match conn_clone.next_event().await {
+                Some(event) => {
+                    let (evt_type, msg) = match event {
+                        ConnectionEvent::Ready => (
+                            types::TransportServicesConnectionEventType::Ready,
+                            "Connection established",
+                        ),
+                        ConnectionEvent::EstablishmentError(ref m) => (
+                            types::TransportServicesConnectionEventType::EstablishmentError,
+                            m.as_str(),
+                        ),
+                        ConnectionEvent::ConnectionError(ref m) => (
+                            types::TransportServicesConnectionEventType::ConnectionError,
+                            m.as_str(),
+                        ),
+                        ConnectionEvent::PathChange => (
+                            types::TransportServicesConnectionEventType::PathChange,
+                            "Path changed",
+                        ),
+                        ConnectionEvent::SoftError(ref m) => (
+                            types::TransportServicesConnectionEventType::SoftError,
+                            m.as_str(),
+                        ),
+                        ConnectionEvent::Closed => (
+                            types::TransportServicesConnectionEventType::Closed,
+                            "Connection closed",
+                        ),
+                        ConnectionEvent::Sent { .. } => (
+                            types::TransportServicesConnectionEventType::Sent,
+                            "Message sent",
+                        ),
+                        ConnectionEvent::Expired { .. } => (
+                            types::TransportServicesConnectionEventType::Expired,
+                            "Message expired",
+                        ),
+                        ConnectionEvent::SendError { .. } => (
+                            types::TransportServicesConnectionEventType::SendError,
+                            "Send error",
+                        ),
+                        ConnectionEvent::Received { .. }
+                        | ConnectionEvent::ReceivedPartial { .. } => {
+                            // Skip these events as they should be handled by receive callback
+                            continue;
+                        }
+                        ConnectionEvent::ReceiveError { ref error, .. } => (
+                            types::TransportServicesConnectionEventType::Received,
+                            error.as_str(),
+                        ),
+                    };
+
+                    // Convert message to C string
+                    let c_msg = CString::new(msg).unwrap_or_else(|_| CString::new("").unwrap());
+
+                    // Call the event callback
+                    (callback_data.event_callback)(
+                        evt_type,
+                        c_msg.as_ptr(),
+                        callback_data.user_data as *mut c_void,
+                    );
+
+                    // Check if we should stop (closed event)
+                    if matches!(event, ConnectionEvent::Closed) {
+                        break;
+                    }
+                }
+                None => {
+                    // No more events
+                    break;
+                }
+            }
+        }
+    }) {
+        Ok(_) => types::TransportServicesError::Success,
+        Err(e) => {
+            error::set_last_error_string(&e);
+            types::TransportServicesError::RuntimeError
+        }
+    }
+}
+
+/// Poll for the next event on a connection (non-blocking) - DEPRECATED
 #[no_mangle]
 pub unsafe extern "C" fn transport_services_connection_poll_event(
     handle: *mut TransportServicesHandle,

@@ -191,16 +191,16 @@ This document outlines the phases and steps required to implement the TAPS (Tran
         - [ ] **Adopt a Consistent Async Pattern**:
             - [x] Ensure all operations that perform I/O are non-blocking and use callbacks.
             - [x] The standard pattern should be: `function(..., callback, user_data)`, where `user_data` is a pointer passed back to the callback, allowing wrappers to manage state.
-    - [ ] **Specific FFI Function Modifications and Additions**:
-        - [ ] **Connection API**:
-            - [ ] **Add Async Receive**: Implement `transport_services_connection_receive(handle: *mut Handle, message_callback: fn(*const Message), error_callback: fn(Error), user_data: *mut c_void)`. This is the most critical missing piece for async data handling.
-            - [ ] **Make Close Async**: Change `transport_services_connection_close` to `transport_services_connection_close_async(handle, callback, user_data)` to properly signal when the graceful close is complete.
-        - [ ] **Listener API**:
-            - [ ] **Add Connection Callback**: Implement `transport_services_listener_set_callbacks(handle, connection_received_callback, error_callback, user_data)` to handle incoming connections asynchronously instead of requiring polling.
-            - [ ] **Make Stop Async**: Change `transport_services_listener_stop` to `transport_services_listener_stop_async(handle, callback, user_data)`.
-        - [ ] **Event Handling**:
-            - [ ] **Replace Polling with Callbacks**: Deprecate `transport_services_connection_poll_event`.
-            - [ ] **Implement Event Callback Setter**: Add `transport_services_connection_set_event_callback(handle, event_callback, user_data)` to push events like `PathChange`, `Closed`, etc., to the client.
+    - [x] **Specific FFI Function Modifications and Additions**:
+        - [x] **Connection API**:
+            - [x] **Add Async Receive**: Implement `transport_services_connection_receive(handle: *mut Handle, message_callback: fn(*const Message), error_callback: fn(Error), user_data: *mut c_void)`. This is the most critical missing piece for async data handling.
+            - [x] **Make Close Async**: Change `transport_services_connection_close` to `transport_services_connection_close_async(handle, callback, user_data)` to properly signal when the graceful close is complete.
+        - [x] **Listener API**:
+            - [x] **Add Connection Callback**: Implement `transport_services_listener_set_callbacks(handle, connection_received_callback, error_callback, user_data)` to handle incoming connections asynchronously instead of requiring polling.
+            - [x] **Make Stop Async**: Change `transport_services_listener_stop` to `transport_services_listener_stop_async(handle, callback, user_data)`.
+        - [x] **Event Handling**:
+            - [x] **Replace Polling with Callbacks**: Deprecate `transport_services_connection_poll_event`.
+            - [x] **Implement Event Callback Setter**: Add `transport_services_connection_set_event_callback(handle, event_callback, user_data)` to push events like `PathChange`, `Closed`, etc., to the client.
     - [ ] **Guidance for Language-Specific Wrappers**:
         - [ ] **Swift Wrapper (Swift Package)**:
             - [ ] Use `withCheckedThrowingContinuation` to wrap callback-based functions into `async throws` methods.

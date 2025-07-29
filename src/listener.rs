@@ -25,7 +25,7 @@ pub enum ListenerEvent {
 /// A Listener waits for incoming Connections from Remote Endpoints
 pub struct Listener {
     inner: Arc<RwLock<ListenerInner>>,
-    event_receiver: mpsc::UnboundedReceiver<ListenerEvent>,
+    event_receiver: Arc<RwLock<mpsc::UnboundedReceiver<ListenerEvent>>>,
     stop_sender: tokio::sync::broadcast::Sender<()>,
     active: Arc<AtomicBool>,
     connection_limit: Arc<AtomicUsize>,
@@ -35,6 +35,18 @@ struct ListenerInner {
     preconnection: Preconnection,
     event_sender: mpsc::UnboundedSender<ListenerEvent>,
     local_addr: Option<SocketAddr>,
+}
+
+impl Clone for Listener {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            event_receiver: Arc::clone(&self.event_receiver),
+            stop_sender: self.stop_sender.clone(),
+            active: Arc::clone(&self.active),
+            connection_limit: Arc::clone(&self.connection_limit),
+        }
+    }
 }
 
 impl Listener {
@@ -53,7 +65,7 @@ impl Listener {
 
         Self {
             inner,
-            event_receiver,
+            event_receiver: Arc::new(RwLock::new(event_receiver)),
             stop_sender,
             active,
             connection_limit,
@@ -213,9 +225,10 @@ impl Listener {
     }
 
     /// Accept the next incoming connection
-    pub async fn accept(&mut self) -> Result<Connection> {
+    pub async fn accept(&self) -> Result<Connection> {
         loop {
-            match self.event_receiver.recv().await {
+            let mut receiver = self.event_receiver.write().await;
+            match receiver.recv().await {
                 Some(ListenerEvent::ConnectionReceived(connection)) => return Ok(connection),
                 Some(ListenerEvent::Stopped) => {
                     return Err(TransportServicesError::InvalidState(
@@ -236,8 +249,9 @@ impl Listener {
     }
 
     /// Get the next event without blocking
-    pub async fn next_event(&mut self) -> Option<ListenerEvent> {
-        self.event_receiver.recv().await
+    pub async fn next_event(&self) -> Option<ListenerEvent> {
+        let mut receiver = self.event_receiver.write().await;
+        receiver.recv().await
     }
 
     /// Stop listening for new connections
