@@ -203,7 +203,7 @@ async fn test_rendezvous_incoming_connection() {
         SecurityParameters::default(),
     );
 
-    let (connection, mut listener) = preconn.rendezvous().await.unwrap();
+    let (connection, listener) = preconn.rendezvous().await.unwrap();
     let listen_addr = listener.local_addr().await.unwrap();
 
     // Connect to the listener

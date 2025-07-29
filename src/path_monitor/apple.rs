@@ -4,6 +4,7 @@
 
 use super::*;
 use libc::{c_void, freeifaddrs, getifaddrs, if_nametoindex, ifaddrs, AF_INET, AF_INET6};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::ptr;
 use std::sync::Arc;

@@ -3,8 +3,9 @@
 //! This module provides cross-platform network interface and path monitoring,
 //! allowing applications to track network changes and adapt connections accordingly.
 
-use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
+#[cfg(target_vendor = "apple")]
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 
 // Platform-specific implementations

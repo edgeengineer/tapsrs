@@ -3,14 +3,13 @@
 //! Uses rtnetlink for monitoring network interface and address changes.
 
 use super::*;
-use futures::stream::StreamExt;
+use futures::stream::TryStreamExt;
 use netlink_packet_route::address::AddressMessage;
 use netlink_packet_route::link::LinkMessage;
-use rtnetlink::packet::rtnl::address::nlas::Nla as AddressNla;
-use rtnetlink::packet::rtnl::link::nlas::Nla as LinkNla;
-use rtnetlink::{new_connection, Error as RtError, Handle};
+use rtnetlink::{new_connection, Handle};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use tokio::runtime::Runtime;
 
 pub struct LinuxMonitor {
@@ -29,30 +28,22 @@ impl PlatformMonitor for LinuxMonitor {
 
             // Get all links
             let mut links = handle.link().get().execute();
-            while let Some(link_msg) = links.next().await {
-                match link_msg {
-                    Ok(msg) => {
-                        if let Some(interface) = parse_link_message(&msg).await {
-                            interfaces.push(interface);
-                        }
-                    }
-                    Err(e) => {
-                        return Err(Error::PlatformError(format!("Failed to get links: {}", e)));
-                    }
+            while let Some(msg) = links
+                .try_next()
+                .await
+                .map_err(|e| Error::PlatformError(format!("Failed to get links: {}", e)))?
+            {
+                if let Some(interface) = parse_link_message(&msg).await {
+                    interfaces.push(interface);
                 }
             }
 
             // Get addresses for each interface
             for interface in &mut interfaces {
                 let mut addrs = handle.address().get().execute();
-                while let Some(addr_msg) = addrs.next().await {
-                    match addr_msg {
-                        Ok(msg) => {
-                            if let Some(addr) = parse_address_message(&msg, interface.index) {
-                                interface.ips.push(addr);
-                            }
-                        }
-                        Err(_) => continue,
+                while let Some(msg) = addrs.try_next().await.unwrap_or(None) {
+                    if let Some(addr) = parse_address_message(&msg, interface.index) {
+                        interface.ips.push(addr);
                     }
                 }
             }
@@ -65,18 +56,13 @@ impl PlatformMonitor for LinuxMonitor {
         &mut self,
         callback: Box<dyn Fn(ChangeEvent) + Send + 'static>,
     ) -> PlatformHandle {
-        let handle = self.handle.clone();
+        let _handle = self.handle.clone();
         let runtime = self.runtime.clone();
-        let callback = Arc::new(Mutex::new(callback));
+        let _callback = Arc::new(Mutex::new(callback));
 
         // Spawn a thread to run the async monitoring
         let watcher = thread::spawn(move || {
             runtime.block_on(async {
-                // Subscribe to link and address events
-                let groups = rtnetlink::constants::RTMGRP_LINK
-                    | rtnetlink::constants::RTMGRP_IPV4_IFADDR
-                    | rtnetlink::constants::RTMGRP_IPV6_IFADDR;
-
                 // This is a simplified version - actual implementation would
                 // subscribe to netlink events and process them
                 loop {
@@ -105,13 +91,16 @@ async fn parse_link_message(msg: &LinkMessage) -> Option<Interface> {
     let mut status = Status::Unknown;
     let index = msg.header.index;
 
-    for nla in &msg.nlas {
-        match nla {
-            LinkNla::IfName(n) => name = n.clone(),
-            LinkNla::OperState(state) => {
+    // Parse attributes
+    for attr in &msg.attributes {
+        use netlink_packet_route::link::LinkAttribute;
+        match attr {
+            LinkAttribute::IfName(n) => name = n.clone(),
+            LinkAttribute::OperState(state) => {
+                use netlink_packet_route::link::State;
                 status = match state {
-                    6 => Status::Up,   // IF_OPER_UP
-                    2 => Status::Down, // IF_OPER_DOWN
+                    State::Up => Status::Up,
+                    State::Down => Status::Down,
                     _ => Status::Unknown,
                 };
             }
@@ -138,28 +127,12 @@ fn parse_address_message(msg: &AddressMessage, if_index: u32) -> Option<IpAddr> 
         return None;
     }
 
-    for nla in &msg.nlas {
-        match nla {
-            AddressNla::Address(addr) => {
-                match msg.header.family as u16 {
-                    2 => {
-                        // AF_INET
-                        if addr.len() == 4 {
-                            let mut bytes = [0u8; 4];
-                            bytes.copy_from_slice(addr);
-                            return Some(IpAddr::V4(Ipv4Addr::from(bytes)));
-                        }
-                    }
-                    10 => {
-                        // AF_INET6
-                        if addr.len() == 16 {
-                            let mut bytes = [0u8; 16];
-                            bytes.copy_from_slice(addr);
-                            return Some(IpAddr::V6(Ipv6Addr::from(bytes)));
-                        }
-                    }
-                    _ => {}
-                }
+    for attr in &msg.attributes {
+        use netlink_packet_route::address::AddressAttribute;
+        match attr {
+            AddressAttribute::Address(addr) => {
+                // addr is IpAddr, not bytes
+                return Some(addr.clone());
             }
             _ => {}
         }

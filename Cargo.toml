@@ -34,7 +34,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rtnetlink = "0.14"
-netlink-packet-route = "0.20"
+netlink-packet-route = "0.19"
 futures = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
