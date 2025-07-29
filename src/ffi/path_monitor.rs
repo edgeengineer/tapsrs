@@ -321,4 +321,3 @@ unsafe fn free_ffi_change_event(event: TransportServicesChangeEvent) {
         let _ = CString::from_raw(event.description);
     }
 }
-
