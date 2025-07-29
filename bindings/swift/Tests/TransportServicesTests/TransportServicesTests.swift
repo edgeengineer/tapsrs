@@ -1,5 +1,11 @@
 import Testing
+#if !hasFeature(Embedded)
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#elseif canImport(Foundation)
 import Foundation
+#endif
+#endif
 @testable import TransportServices
 
 @Suite("Transport Services Tests")

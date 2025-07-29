@@ -1,4 +1,10 @@
+#if !hasFeature(Embedded)
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#elseif canImport(Foundation)
 import Foundation
+#endif
+#endif
 import TransportServicesFFI
 
 /// Preconnection represents a set of parameters for establishing connections

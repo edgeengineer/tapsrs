@@ -1,4 +1,10 @@
+#if !hasFeature(Embedded)
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#elseif canImport(Foundation)
 import Foundation
+#endif
+#endif
 import TransportServices
 
 /// Example demonstrating the PathMonitor API with Swift 6 concurrency
