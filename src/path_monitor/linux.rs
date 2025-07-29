@@ -7,6 +7,7 @@ use futures::stream::TryStreamExt;
 use netlink_packet_route::address::AddressMessage;
 use netlink_packet_route::link::LinkMessage;
 use rtnetlink::{new_connection, Handle};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -15,7 +16,6 @@ use tokio::runtime::Runtime;
 pub struct LinuxMonitor {
     handle: Handle,
     runtime: Arc<Runtime>,
-    watcher_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl PlatformMonitor for LinuxMonitor {
@@ -59,30 +59,42 @@ impl PlatformMonitor for LinuxMonitor {
         let _handle = self.handle.clone();
         let runtime = self.runtime.clone();
         let _callback = Arc::new(Mutex::new(callback));
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let thread_stop_flag = stop_flag.clone();
 
         // Spawn a thread to run the async monitoring
         let watcher = thread::spawn(move || {
             runtime.block_on(async {
                 // This is a simplified version - actual implementation would
                 // subscribe to netlink events and process them
-                loop {
+                while !thread_stop_flag.load(Ordering::Relaxed) {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     // Check for changes and call callback
                 }
             });
         });
 
-        self.watcher_handle = Some(watcher);
-
-        Box::new(LinuxMonitorHandle {})
+        Box::new(LinuxMonitorHandle {
+            watcher_handle: Some(watcher),
+            stop_flag,
+        })
     }
 }
 
-struct LinuxMonitorHandle;
+struct LinuxMonitorHandle {
+    watcher_handle: Option<thread::JoinHandle<()>>,
+    stop_flag: Arc<AtomicBool>,
+}
 
 impl Drop for LinuxMonitorHandle {
     fn drop(&mut self) {
         // Signal the watcher thread to stop
+        self.stop_flag.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.watcher_handle.take() {
+            // It's generally good practice to join the thread
+            // to ensure it has cleaned up properly.
+            let _ = handle.join();
+        }
     }
 }
 
@@ -170,9 +182,5 @@ pub fn create_platform_impl() -> Result<Box<dyn PlatformMonitor + Send + Sync>, 
     // Spawn connection handler
     runtime.spawn(conn);
 
-    Ok(Box::new(LinuxMonitor {
-        handle,
-        runtime,
-        watcher_handle: None,
-    }))
+    Ok(Box::new(LinuxMonitor { handle, runtime }))
 }

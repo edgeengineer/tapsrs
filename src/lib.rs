@@ -25,7 +25,7 @@ pub use connection_properties::{
 };
 pub use error::{Result, TransportServicesError};
 pub use framer::{Framer, FramerStack, LengthPrefixFramer};
-pub use listener::Listener;
+pub use listener::{Listener, ListenerEvent};
 pub use message::{Message, MessageContext};
 pub use path_monitor::{ChangeEvent, Interface, MonitorHandle, NetworkMonitor, Status};
 pub use preconnection::Preconnection;

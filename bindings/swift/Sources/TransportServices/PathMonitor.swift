@@ -7,7 +7,7 @@ import TransportServicesFFI
 /// 
 /// This class provides an async/await interface for monitoring network interface changes
 /// and is fully thread-safe with Sendable conformance.
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public final class PathMonitor: Sendable {
     private let handle: OpaquePointer
     private let lock = NSLock()
@@ -109,7 +109,7 @@ public final class PathMonitor: Sendable {
 // MARK: - Network Interface
 
 /// Represents a network interface
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public struct NetworkInterface: Sendable, Identifiable {
     public let id: String
     public let name: String
@@ -159,7 +159,7 @@ public struct NetworkInterface: Sendable, Identifiable {
 // MARK: - Network Change Events
 
 /// Represents a network change event
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public enum NetworkChangeEvent: Sendable {
     case added(NetworkInterface)
     case removed(NetworkInterface)
@@ -207,7 +207,7 @@ public enum NetworkChangeEvent: Sendable {
 // MARK: - AsyncSequence for Network Changes
 
 /// An AsyncSequence that yields network change events
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public struct NetworkChangeSequence: AsyncSequence, Sendable {
     public typealias Element = NetworkChangeEvent
     
@@ -223,7 +223,7 @@ public struct NetworkChangeSequence: AsyncSequence, Sendable {
 }
 
 /// AsyncIterator for network change events
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public actor NetworkChangeIterator: AsyncIteratorProtocol {
     public typealias Element = NetworkChangeEvent
     
@@ -289,7 +289,7 @@ private final class NetworkChangeContext {
 // MARK: - Errors
 
 /// Errors that can occur with path monitoring
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public enum PathMonitorError: Error, LocalizedError {
     case creationFailed(message: String)
     case listInterfacesFailed(message: String)
@@ -309,7 +309,7 @@ public enum PathMonitorError: Error, LocalizedError {
 
 // MARK: - Convenience Extensions
 
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+
 public extension NetworkInterface {
     /// Check if this interface has IPv4 connectivity
     var hasIPv4: Bool {

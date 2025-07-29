@@ -137,7 +137,7 @@ pub unsafe extern "C" fn transport_services_path_monitor_list_interfaces(
                 *iface_array.add(i) = ffi_iface;
             }
 
-            *interfaces = iface_array;
+            *interfaces = iface_array as *mut TransportServicesInterface;
             0
         }
         Err(e) => {
@@ -252,31 +252,31 @@ unsafe fn free_ffi_interface(iface: *mut TransportServicesInterface) {
         return;
     }
 
-    let iface = &*iface;
+    let iface_ref = &*iface;
 
     // Free name
-    if !iface.name.is_null() {
-        let _ = CString::from_raw(iface.name);
+    if !iface_ref.name.is_null() {
+        let _ = CString::from_raw(iface_ref.name);
     }
 
     // Free interface type
-    if !iface.interface_type.is_null() {
-        let _ = CString::from_raw(iface.interface_type);
+    if !iface_ref.interface_type.is_null() {
+        let _ = CString::from_raw(iface_ref.interface_type);
     }
 
     // Free IP addresses
-    if !iface.ips.is_null() && iface.ip_count > 0 {
-        for i in 0..iface.ip_count {
-            let ip_ptr = *iface.ips.add(i);
+    if !iface_ref.ips.is_null() && iface_ref.ip_count > 0 {
+        for i in 0..iface_ref.ip_count {
+            let ip_ptr = *iface_ref.ips.add(i);
             if !ip_ptr.is_null() {
                 let _ = CString::from_raw(ip_ptr);
             }
         }
-        libc::free(iface.ips as *mut c_void);
+        libc::free(iface_ref.ips as *mut c_void);
     }
 
     // Free the interface struct itself
-    let _ = Box::from_raw(iface as *mut TransportServicesInterface);
+    let _ = Box::from_raw(iface);
 }
 
 fn change_event_to_ffi(event: ChangeEvent) -> TransportServicesChangeEvent {
