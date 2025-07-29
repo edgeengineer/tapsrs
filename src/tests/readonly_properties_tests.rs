@@ -16,7 +16,7 @@ async fn create_test_connection() -> Connection {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -143,7 +143,7 @@ async fn test_unidirectional_send_connection() {
             .direction(CommunicationDirection::UnidirectionalSend)
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             transport_props,
@@ -201,7 +201,7 @@ async fn test_unidirectional_receive_connection() {
             .direction(CommunicationDirection::UnidirectionalReceive)
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             transport_props,

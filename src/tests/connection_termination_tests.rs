@@ -29,7 +29,7 @@ async fn create_test_connection() -> Connection {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -244,7 +244,7 @@ async fn test_remote_close_detection() {
         });
 
         // Create connection
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             TransportProperties::default(),

@@ -9,22 +9,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-/// Create a new Preconnection as defined in RFC Section 6
-/// This is the primary way to create a Preconnection object
-pub fn new_preconnection(
-    local_endpoints: Vec<LocalEndpoint>,
-    remote_endpoints: Vec<RemoteEndpoint>,
-    transport_properties: TransportProperties,
-    security_parameters: SecurityParameters,
-) -> Preconnection {
-    Preconnection::new(
-        local_endpoints,
-        remote_endpoints,
-        transport_properties,
-        security_parameters,
-    )
-}
-
 /// A Preconnection represents a potential Connection
 /// It is a passive object that maintains the state describing
 /// the properties of a Connection that might exist in the future

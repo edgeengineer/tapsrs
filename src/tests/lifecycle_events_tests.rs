@@ -16,7 +16,7 @@ async fn create_test_connection() -> Connection {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -95,7 +95,7 @@ async fn test_enable_soft_error_notifications() {
         let mut transport_props = TransportProperties::default();
         transport_props.selection_properties.soft_error_notify = Preference::Require;
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             transport_props,
@@ -136,7 +136,7 @@ async fn test_lifecycle_events_on_connection_group() {
         });
 
         // Create first connection
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             TransportProperties::default(),
@@ -198,7 +198,7 @@ async fn test_soft_error_during_data_transfer() {
 async fn test_path_change_on_endpoint_addition() {
     tokio::time::timeout(Duration::from_secs(5), async {
         // Create connection in establishing state
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder()
                 .hostname("example.com")

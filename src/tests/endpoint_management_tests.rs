@@ -4,7 +4,7 @@ use crate::*;
 
 #[tokio::test]
 async fn test_add_remote_endpoint_to_establishing_connection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -44,7 +44,7 @@ async fn test_add_duplicate_remote_endpoint() {
         .port(443)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![endpoint.clone()],
         TransportProperties::default(),
@@ -67,7 +67,7 @@ async fn test_add_duplicate_remote_endpoint() {
 
 #[tokio::test]
 async fn test_add_remote_to_closed_connection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -105,7 +105,7 @@ async fn test_add_remote_to_closed_connection() {
 
 #[tokio::test]
 async fn test_add_local_endpoint_to_establishing_connection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -143,7 +143,7 @@ async fn test_add_duplicate_local_endpoint() {
         identifiers: vec![EndpointIdentifier::Interface("eth0".to_string())],
     };
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![endpoint.clone()],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -169,7 +169,7 @@ async fn test_add_duplicate_local_endpoint() {
 
 #[tokio::test]
 async fn test_add_local_to_closed_connection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")

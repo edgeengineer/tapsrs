@@ -18,7 +18,7 @@ async fn test_tcp_mss_query() {
     });
 
     // Create a connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -77,7 +77,7 @@ async fn test_tcp_mss_query() {
 
 #[tokio::test]
 async fn test_mss_property_not_set_before_connection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")

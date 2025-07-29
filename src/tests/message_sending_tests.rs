@@ -1,8 +1,8 @@
 //! Unit tests for Message Sending functionality
 
 use crate::{
-    message::SendContext, preconnection::new_preconnection, ConnectionEvent, ConnectionState,
-    Message, RemoteEndpoint, SecurityParameters, TransportProperties,
+    message::SendContext, ConnectionEvent, ConnectionState, Message, Preconnection, RemoteEndpoint,
+    SecurityParameters, TransportProperties,
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -30,7 +30,7 @@ async fn test_basic_message_send() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -87,7 +87,7 @@ async fn test_message_with_id() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -141,7 +141,7 @@ async fn test_partial_sends() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -201,7 +201,7 @@ async fn test_message_batching() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -265,7 +265,7 @@ async fn test_message_expiry() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -333,7 +333,7 @@ async fn test_initiate_with_send() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -373,7 +373,7 @@ async fn test_send_on_closed_connection() {
         }
     });
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -423,7 +423,7 @@ async fn test_send_with_event_notifier() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),

@@ -1,15 +1,15 @@
 //! Unit tests for Listener implementation
 
 use crate::{
-    listener::ListenerEvent, preconnection::new_preconnection, EndpointIdentifier, LocalEndpoint,
-    SecurityParameters, TransportProperties,
+    listener::ListenerEvent, EndpointIdentifier, LocalEndpoint, Preconnection, SecurityParameters,
+    TransportProperties,
 };
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 
 #[tokio::test]
 async fn test_listener_creation() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::Port(0), // Let OS choose port
@@ -35,7 +35,7 @@ async fn test_listener_creation() {
 #[tokio::test]
 async fn test_listener_with_specific_port() {
     let port = 54321;
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
@@ -60,7 +60,7 @@ async fn test_listener_with_specific_port() {
 
 #[tokio::test]
 async fn test_listener_no_endpoints_error() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![], // No local endpoints
         vec![],
         TransportProperties::default(),
@@ -79,7 +79,7 @@ async fn test_listener_no_endpoints_error() {
 async fn test_listener_accept_with_connection() {
     use tokio::net::TcpStream;
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
@@ -127,7 +127,7 @@ async fn test_listener_accept_with_connection() {
 
 #[tokio::test]
 async fn test_listener_stop() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![EndpointIdentifier::Port(0)],
         }],
@@ -152,7 +152,7 @@ async fn test_listener_stop() {
 async fn test_listener_connection_limit() {
     use tokio::net::TcpStream;
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
@@ -199,7 +199,7 @@ async fn test_listener_connection_limit() {
 async fn test_listener_event_stream() {
     use tokio::net::TcpStream;
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
@@ -245,7 +245,7 @@ async fn test_listener_event_stream() {
 async fn test_listener_multiple_connections() {
     use tokio::net::TcpStream;
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![
                 EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
@@ -303,7 +303,7 @@ async fn test_listener_socket_address_endpoint() {
     use std::net::SocketAddr;
 
     let socket_addr: SocketAddr = "127.0.0.1:54322".parse().unwrap();
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![EndpointIdentifier::SocketAddress(socket_addr)],
         }],
@@ -323,7 +323,7 @@ async fn test_listener_socket_address_endpoint() {
 
 #[tokio::test]
 async fn test_listener_bind_any_address() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![], // No specific address - should bind to 0.0.0.0:0
         }],

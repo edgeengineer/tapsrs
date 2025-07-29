@@ -34,7 +34,7 @@ async fn test_close_group_closes_all_connections() {
     });
 
     // Create first connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -106,7 +106,7 @@ async fn test_abort_group_aborts_all_connections() {
     });
 
     // Create first connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -184,7 +184,7 @@ async fn test_close_group_on_ungrouped_connection() {
         });
 
         // Create a real connection (not part of a group)
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             TransportProperties::default(),
@@ -243,7 +243,7 @@ async fn test_abort_group_on_ungrouped_connection() {
         });
 
         // Create a real connection (not part of a group)
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![RemoteEndpoint::builder().socket_address(addr).build()],
             TransportProperties::default(),

@@ -6,7 +6,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn test_set_and_get_properties() {
     // Create a connection for testing
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -42,7 +42,7 @@ async fn test_set_and_get_properties() {
 
 #[tokio::test]
 async fn test_connection_properties_defaults() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -84,7 +84,7 @@ async fn test_connection_properties_defaults() {
 
 #[tokio::test]
 async fn test_readonly_properties() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -126,7 +126,7 @@ async fn test_readonly_properties() {
 
 #[tokio::test]
 async fn test_readonly_property_rejection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -165,7 +165,7 @@ async fn test_readonly_property_rejection() {
 
 #[tokio::test]
 async fn test_timeout_properties() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -205,7 +205,7 @@ async fn test_timeout_properties() {
 
 #[tokio::test]
 async fn test_capacity_profile() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
@@ -243,7 +243,7 @@ async fn test_capacity_profile() {
 
 #[tokio::test]
 async fn test_rate_limits() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")
