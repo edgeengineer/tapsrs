@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Transport Services Contributors"]
 description = "Transport Services - RFC 9622 implementation"
-repository = "https://github.com/yourusername/transport-services-rs"
+repository = "https://github.com/edgeengineer/tapsrs"
 license = "MIT OR Apache-2.0"
 
 [lib]

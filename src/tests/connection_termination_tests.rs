@@ -135,6 +135,9 @@ async fn test_close_delivers_pending_messages() {
                 Some(ConnectionEvent::Sent { .. }) => {
                     sent_count += 1;
                 }
+                Some(ConnectionEvent::Received { .. }) => {
+                    // Ignore echoed messages from the test server
+                }
                 Some(ConnectionEvent::Closed) => {
                     break;
                 }
