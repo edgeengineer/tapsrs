@@ -69,3 +69,11 @@ cbindgen = ["dep:cbindgen"]
 lto = true
 codegen-units = 1
 opt-level = 3
+
+[[example]]
+name = "path_monitor"
+required-features = []
+
+[[example]]
+name = "path_monitor_detailed"
+required-features = []

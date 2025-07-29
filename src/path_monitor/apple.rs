@@ -10,7 +10,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::sync::Arc;
-use libc::{getifaddrs, freeifaddrs, ifaddrs, AF_INET, AF_INET6};
+use libc::{getifaddrs, freeifaddrs, ifaddrs, AF_INET, AF_INET6, if_nametoindex};
 
 #[link(name = "Network", kind = "framework")]
 extern "C" {}
@@ -36,18 +36,25 @@ impl PlatformMonitor for AppleMonitor {
             let mut interfaces_map: HashMap<String, Interface> = HashMap::new();
             let mut current = ifap;
             
+            // Get current path info if available
+            let is_expensive_map = self.get_expensive_interfaces();
+            
             while !current.is_null() {
                 let ifa = &*current;
                 if let Some(name) = ifa.ifa_name.as_ref() {
                     let name_str = CStr::from_ptr(name).to_string_lossy().to_string();
+                    let name_cstring = CString::new(name_str.as_str()).unwrap();
+                    
+                    // Get interface index
+                    let if_index = if_nametoindex(name_cstring.as_ptr());
                     
                     let interface = interfaces_map.entry(name_str.clone()).or_insert(Interface {
                         name: name_str.clone(),
-                        index: 0, // TODO: Get actual interface index
+                        index: if_index,
                         ips: Vec::new(),
                         status: Status::Unknown,
                         interface_type: detect_interface_type(&name_str),
-                        is_expensive: false, // TODO: Detect from NWPath
+                        is_expensive: is_expensive_map.get(&name_str).copied().unwrap_or(false),
                     });
                     
                     // Check if interface is up
@@ -112,6 +119,73 @@ impl PlatformMonitor for AppleMonitor {
     }
 }
 
+impl AppleMonitor {
+    /// Get expensive interfaces from NWPath
+    unsafe fn get_expensive_interfaces(&self) -> HashMap<String, bool> {
+        let mut expensive_map = HashMap::new();
+        
+        // If we have a current path from the monitor, use it
+        if let Some(monitor) = self.monitor {
+            let path: *mut Object = msg_send![monitor, currentPath];
+            if !path.is_null() {
+                self.parse_path_expensive_info(path, &mut expensive_map);
+            }
+        }
+        
+        // Also check using default path monitor
+        let monitor_class = class!(NWPathMonitor);
+        let temp_monitor: *mut Object = msg_send![monitor_class, alloc];
+        let temp_monitor: *mut Object = msg_send![temp_monitor, init];
+        let current_path: *mut Object = msg_send![temp_monitor, currentPath];
+        
+        if !current_path.is_null() {
+            self.parse_path_expensive_info(current_path, &mut expensive_map);
+        }
+        
+        let _: () = msg_send![temp_monitor, cancel];
+        let _: () = msg_send![temp_monitor, release];
+        
+        expensive_map
+    }
+    
+    /// Parse NWPath to extract expensive interface information
+    unsafe fn parse_path_expensive_info(&self, path: *mut Object, expensive_map: &mut HashMap<String, bool>) {
+        // Check if path is expensive overall
+        let is_expensive: bool = msg_send![path, isExpensive];
+        
+        // Get available interfaces from the path
+        let interfaces: *mut Object = msg_send![path, availableInterfaces];
+        if !interfaces.is_null() {
+            // Enumerate through the interfaces
+            let count: usize = msg_send![interfaces, count];
+            for i in 0..count {
+                let interface: *mut Object = msg_send![interfaces, objectAtIndex: i];
+                if !interface.is_null() {
+                    // Get interface name
+                    let name: *const c_char = msg_send![interface, name];
+                    if !name.is_null() {
+                        let name_str = CStr::from_ptr(name).to_string_lossy().to_string();
+                        
+                        // Check if this specific interface is expensive
+                        // For now, we'll use the overall path expense status
+                        // In a more complete implementation, we'd check per-interface
+                        expensive_map.insert(name_str, is_expensive);
+                    }
+                }
+            }
+        }
+        
+        // Also check if constrained (low data mode)
+        let is_constrained: bool = msg_send![path, isConstrained];
+        if is_constrained {
+            // Mark all interfaces as expensive if in constrained mode
+            for (_, expensive) in expensive_map.iter_mut() {
+                *expensive = true;
+            }
+        }
+    }
+}
+
 struct MonitorStopHandle {
     monitor: *mut Object,
 }
@@ -127,18 +201,35 @@ impl Drop for MonitorStopHandle {
 }
 
 fn detect_interface_type(name: &str) -> String {
-    if name.starts_with("en") {
-        if name == "en0" {
-            "wifi".to_string()
-        } else {
-            "ethernet".to_string()
-        }
-    } else if name.starts_with("pdp_ip") {
-        "cellular".to_string()
-    } else if name.starts_with("lo") {
-        "loopback".to_string()
-    } else {
-        "unknown".to_string()
+    match name {
+        // Loopback
+        "lo0" | "lo" => "loopback".to_string(),
+        
+        // WiFi - en0 is typically WiFi on macOS
+        "en0" => "wifi".to_string(),
+        
+        // Ethernet - other en interfaces
+        name if name.starts_with("en") => "ethernet".to_string(),
+        
+        // Cellular/Mobile data
+        name if name.starts_with("pdp_ip") => "cellular".to_string(),
+        
+        // Thunderbolt bridge
+        name if name.starts_with("bridge") => "bridge".to_string(),
+        
+        // VPN interfaces
+        name if name.starts_with("utun") => "vpn".to_string(),
+        name if name.starts_with("ipsec") => "vpn".to_string(),
+        name if name.starts_with("ppp") => "vpn".to_string(),
+        
+        // Bluetooth PAN
+        name if name.starts_with("awdl") => "awdl".to_string(), // Apple Wireless Direct Link
+        
+        // FireWire
+        name if name.starts_with("fw") => "firewire".to_string(),
+        
+        // Default
+        _ => "unknown".to_string(),
     }
 }
 
