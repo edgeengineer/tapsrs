@@ -362,25 +362,45 @@ async fn test_initiate_with_send() {
 
 #[tokio::test]
 async fn test_send_on_closed_connection() {
+    // Start a test server
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    // Accept and immediately close connection
+    let accept_handle = tokio::spawn(async move {
+        if let Ok((stream, _)) = listener.accept().await {
+            drop(stream); // Immediately close
+        }
+    });
+
     let preconn = new_preconnection(
         vec![],
-        vec![RemoteEndpoint::builder()
-            .ip_address("127.0.0.1".parse().unwrap())
-            .port(65535) // Invalid port
-            .build()],
+        vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
         SecurityParameters::default(),
     );
 
     let conn = preconn.initiate().await.unwrap();
 
-    // Wait for connection to fail
+    // Wait for ready event
+    match conn.next_event().await {
+        Some(ConnectionEvent::Ready) => {}
+        _ => panic!("Expected Ready event"),
+    }
+
+    // Wait for the server to close the connection
     sleep(Duration::from_millis(100)).await;
 
-    // Try to send on closed connection
+    // Force the connection to be closed by sending Final
+    let final_msg = Message::from_string("Final").with_final(true);
+    let _ = conn.send(final_msg).await;
+
+    // Now try to send on closed connection
     let message = Message::from_string("This should fail");
     let result = conn.send(message).await;
-    assert!(result.is_err());
+    assert!(result.is_err(), "Send should fail on closed connection");
+
+    let _ = accept_handle.await;
 }
 
 #[tokio::test]
