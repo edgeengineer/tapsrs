@@ -886,8 +886,8 @@ impl Connection {
                                 TimeoutValue::Duration(duration) => {
                                     // Enable keep-alive with the specified interval
                                     let keepalive = TcpKeepalive::new()
-                                        .with_time(duration.clone())
-                                        .with_interval(duration.clone());
+                                        .with_time(*duration)
+                                        .with_interval(*duration);
 
                                     if let Err(e) = socket.set_tcp_keepalive(&keepalive) {
                                         log::warn!("Failed to set TCP keep-alive: {e}");
