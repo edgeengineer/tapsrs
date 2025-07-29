@@ -10,7 +10,6 @@ import TransportServicesFFI
 // MARK: - Endpoint Protocol
 
 /// Common protocol for all endpoint types
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public protocol Endpoint: Sendable {
     /// Convert to FFI representation
     func toFFI() -> TransportServicesEndpoint
@@ -19,7 +18,6 @@ public protocol Endpoint: Sendable {
 // MARK: - Local Endpoint
 
 /// Local endpoint for connections
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public struct LocalEndpoint: Endpoint, Hashable {
     /// IP address (optional)
     public let ipAddress: String?
@@ -60,7 +58,6 @@ public struct LocalEndpoint: Endpoint, Hashable {
 // MARK: - Remote Endpoint
 
 /// Remote endpoint for connections
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public struct RemoteEndpoint: Endpoint, Hashable {
     /// Hostname or IP address
     public let hostname: String
@@ -115,7 +112,6 @@ public struct RemoteEndpoint: Endpoint, Hashable {
 
 // MARK: - Endpoint Utilities
 
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 extension Array where Element == any Endpoint {
     /// Convert array of endpoints to FFI representation
     func toFFIArray() -> (UnsafeMutablePointer<TransportServicesEndpoint>?, Int) {
@@ -131,7 +127,6 @@ extension Array where Element == any Endpoint {
 }
 
 /// Free FFI endpoint array
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 func freeFFIEndpoints(_ endpoints: UnsafeMutablePointer<TransportServicesEndpoint>?, count: Int) {
     guard let endpoints = endpoints, count > 0 else { return }
     

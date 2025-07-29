@@ -10,7 +10,6 @@ import TransportServicesFFI
 // MARK: - Preference
 
 /// Preference level for transport properties
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public enum Preference: Int32, CaseIterable, Sendable {
     case require = 0
     case prefer = 1
@@ -32,7 +31,6 @@ public enum Preference: Int32, CaseIterable, Sendable {
 // MARK: - Multipath Configuration
 
 /// Multipath configuration options
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public enum MultipathConfig: Int32, CaseIterable, Sendable {
     case disabled = 0
     case active = 1
@@ -52,7 +50,6 @@ public enum MultipathConfig: Int32, CaseIterable, Sendable {
 // MARK: - Communication Direction
 
 /// Communication direction for connections
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public enum CommunicationDirection: Int32, CaseIterable, Sendable {
     case bidirectional = 0
     case unidirectionalSend = 1
@@ -72,7 +69,6 @@ public enum CommunicationDirection: Int32, CaseIterable, Sendable {
 // MARK: - Transport Properties
 
 /// Transport properties configuration
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public struct TransportProperties: Sendable {
     // Protocol preferences
     public var reliability: Preference
@@ -179,7 +175,6 @@ public struct TransportProperties: Sendable {
 // MARK: - Security Parameters
 
 /// Security parameters configuration
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
 public struct SecurityParameters: Sendable {
     /// Whether to use TLS
     public var useTLS: Bool
