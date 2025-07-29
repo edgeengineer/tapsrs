@@ -26,14 +26,40 @@ jobs:
     - name: Cache dependencies
       uses: Swatinem/rust-cache@v2
     
-    - name: Build
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake nasm
+    
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install cmake nasm
+    
+    - name: Build (Unix)
+      if: matrix.os != 'windows-latest'
       run: cargo build --verbose
     
-    - name: Run tests
+    - name: Build (Windows)
+      if: matrix.os == 'windows-latest'
+      run: cargo build --verbose --no-default-features
+    
+    - name: Run tests (Unix)
+      if: matrix.os != 'windows-latest'
       run: cargo test --verbose
+    
+    - name: Run tests (Windows)
+      if: matrix.os == 'windows-latest'
+      run: cargo test --verbose --no-default-features
     
     - name: Check formatting
       run: cargo fmt -- --check
     
-    - name: Run clippy
+    - name: Run clippy (Unix)
+      if: matrix.os != 'windows-latest'
       run: cargo clippy -- -D warnings
+    
+    - name: Run clippy (Windows)
+      if: matrix.os == 'windows-latest'
+      run: cargo clippy --no-default-features -- -D warnings

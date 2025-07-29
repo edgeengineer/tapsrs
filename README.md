@@ -55,6 +55,28 @@ For a detailed implementation status, please see the [Implementation Checklist](
 - `cbindgen` for generating the C header file (`cargo install cbindgen`)
 - Cross-compilation targets if needed (e.g., `rustup target add aarch64-apple-ios`)
 
+#### Additional Requirements for QUIC/TLS Support
+
+The library includes optional QUIC and TLS transport support through the `quinn` crate. To build with these features enabled (which is the default), you'll need:
+
+**On Windows:**
+- [CMake](https://cmake.org/download/) - Required by the crypto library build process
+- [NASM](https://www.nasm.us/) - The Netwide Assembler for optimized cryptographic operations
+  - Install via [Chocolatey](https://chocolatey.org/): `choco install cmake nasm`
+  - Or download and install manually from the links above
+
+**On macOS:**
+- CMake and NASM can be installed via Homebrew: `brew install cmake nasm`
+
+**On Linux:**
+- Install via package manager: `sudo apt-get install cmake nasm` (Ubuntu/Debian)
+- Or: `sudo yum install cmake nasm` (RHEL/CentOS)
+
+**Note:** If you don't need QUIC/TLS support, you can build without these dependencies:
+```sh
+cargo build --release --no-default-features
+```
+
 ### Building the Library
 
 1.  **Clone the repository:**

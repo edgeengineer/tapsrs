@@ -196,13 +196,15 @@ async fn test_listener_connection_limit() {
 }
 
 #[tokio::test]
-#[cfg_attr(target_os = "windows", ignore = "Flaky on Windows CI")]
 async fn test_listener_event_stream() {
     use tokio::net::TcpStream;
 
     let preconn = new_preconnection(
         vec![LocalEndpoint {
-            identifiers: vec![EndpointIdentifier::Port(0)],
+            identifiers: vec![
+                EndpointIdentifier::IpAddress("127.0.0.1".parse().unwrap()),
+                EndpointIdentifier::Port(0),
+            ],
         }],
         vec![],
         TransportProperties::default(),
@@ -214,7 +216,6 @@ async fn test_listener_event_stream() {
 
     // Connect and check event
     tokio::spawn(async move {
-        sleep(Duration::from_millis(50)).await;
         let _ = TcpStream::connect(bound_addr).await;
     });
 

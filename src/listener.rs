@@ -93,12 +93,18 @@ impl Listener {
         let preconnection = inner.preconnection.clone();
         drop(inner);
 
+        // Create a channel to signal when the accept loop is ready
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+
         // Spawn accept loop
         let active = Arc::clone(&self.active);
         let connection_limit = Arc::clone(&self.connection_limit);
         let mut stop_receiver = self.stop_sender.subscribe();
 
         tokio::spawn(async move {
+            // Signal that we're ready to accept connections
+            let _ = ready_tx.send(());
+
             loop {
                 if !active.load(Ordering::Relaxed) {
                     break;
@@ -145,6 +151,9 @@ impl Listener {
             active.store(false, Ordering::Relaxed);
             let _ = event_sender.send(ListenerEvent::Stopped);
         });
+
+        // Wait for the accept loop to be ready
+        let _ = ready_rx.await;
 
         Ok(())
     }
