@@ -1,0 +1,88 @@
+# Multi-stage Dockerfile for building Transport Services artifact bundles
+# Supports cross-compilation for all target platforms
+
+FROM rust:1.83-slim AS base
+
+# Install common build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    pkg-config \
+    libssl-dev \
+    zip \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cross-compilation toolchains
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    gcc-mingw-w64-x86-64 \
+    g++-mingw-w64-x86-64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android NDK
+ENV ANDROID_NDK_VERSION=r26b
+ENV ANDROID_NDK_HOME=/opt/android-ndk
+RUN mkdir -p /opt && \
+    cd /opt && \
+    curl -L https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip -o android-ndk.zip && \
+    unzip android-ndk.zip && \
+    mv android-ndk-${ANDROID_NDK_VERSION} ${ANDROID_NDK_HOME} && \
+    rm android-ndk.zip
+
+# Install Rust targets
+RUN rustup target add \
+    aarch64-apple-ios \
+    aarch64-apple-tvos \
+    aarch64-apple-darwin \
+    x86_64-apple-darwin \
+    aarch64-apple-watchos \
+    aarch64-linux-android \
+    x86_64-unknown-linux-gnu \
+    aarch64-unknown-linux-gnu \
+    x86_64-pc-windows-gnu \
+    aarch64-pc-windows-gnullvm
+
+# Install cbindgen
+RUN cargo install cbindgen
+
+# Install osxcross for Apple platforms (optional - requires macOS SDK)
+# This is commented out as it requires macOS SDK which has licensing restrictions
+# Uncomment and provide SDK if you have proper licensing
+# ENV OSXCROSS_ROOT=/opt/osxcross
+# RUN git clone https://github.com/tpoechtrager/osxcross /opt/osxcross-src && \
+#     cd /opt/osxcross-src && \
+#     # Copy macOS SDK here (e.g., MacOSX14.0.sdk.tar.xz)
+#     # ./build.sh
+
+# Set up cargo config for cross-compilation
+RUN mkdir -p /root/.cargo
+COPY <<EOF /root/.cargo/config.toml
+[target.aarch64-linux-android]
+linker = "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
+ar = "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+ar = "aarch64-linux-gnu-ar"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+
+# Apple targets require osxcross or building on macOS
+# [target.aarch64-apple-ios]
+# linker = "${OSXCROSS_ROOT}/bin/aarch64-apple-darwin-clang"
+# ar = "${OSXCROSS_ROOT}/bin/aarch64-apple-darwin-ar"
+EOF
+
+WORKDIR /workspace
+
+# Copy build script
+COPY scripts/build-artifact-bundle.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/build-artifact-bundle.sh
+
+# Entry point
+ENTRYPOINT ["/usr/local/bin/build-artifact-bundle.sh"]

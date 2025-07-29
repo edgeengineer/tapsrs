@@ -44,15 +44,14 @@ fn main() {
     }
 
     // Generate cbindgen headers if FFI feature is enabled
-    #[cfg(feature = "ffi")]
-    {
-        let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    if env::var("CARGO_FEATURE_FFI").is_ok() {
+        // Only run cbindgen if the cbindgen dependency is available
+        #[cfg(feature = "cbindgen")]
+        {
+            let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-        cbindgen::Builder::new()
-            .with_crate(crate_dir)
-            .with_language(cbindgen::Language::C)
-            .generate()
-            .expect("Unable to generate bindings")
-            .write_to_file("transport_services.h");
+            // Don't generate header here - it should be done by build scripts
+            // that place it in the appropriate build directory
+        }
     }
 }

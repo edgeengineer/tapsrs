@@ -2,10 +2,10 @@
 
 use super::*;
 use crate::{
-    Certificate, CertificateChain, PreSharedKey, SecurityParameter, SecurityParameterValue,
-    SecurityParameters, SecurityProtocol,
+    Certificate, PreSharedKey, SecurityParameter, SecurityParameterValue, SecurityParameters,
+    SecurityProtocol,
 };
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_void};
 use std::slice;
 

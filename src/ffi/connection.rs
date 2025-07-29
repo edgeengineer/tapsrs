@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::{Connection, ConnectionEvent, Message};
-use std::ffi::CString;
+use std::os::raw::c_int;
 use std::slice;
 
 /// Get the state of a connection
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn transport_services_connection_send(
         rust_msg = rust_msg.with_priority(msg.priority);
     }
     if msg.idempotent {
-        rust_msg = rust_msg.idempotent();
+        rust_msg = rust_msg.safely_replayable();
     }
     if msg.final_message {
         rust_msg = rust_msg.final_message();
@@ -63,30 +63,44 @@ pub unsafe extern "C" fn transport_services_connection_send(
     // Clone for moving into async task
     let conn_clone = conn.clone();
 
-    // Spawn async task to handle send
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            match conn_clone.send(rust_msg).await {
-                Ok(()) => {
-                    callback(
-                        types::TransportServicesError::Success,
-                        std::ptr::null(),
-                        user_data,
-                    );
-                }
-                Err(e) => {
-                    error::set_last_error(&e);
-                    let error_code = types::TransportServicesError::from(e);
-                    callback(
-                        error_code,
-                        error::transport_services_get_last_error(),
-                        user_data,
-                    );
-                }
+    // Wrap user_data in a type that is Send
+    struct CallbackData {
+        callback: types::TransportServicesErrorCallback,
+        user_data: usize,
+    }
+
+    let callback_data = CallbackData {
+        callback,
+        user_data: user_data as usize,
+    };
+
+    // Spawn async task to handle send using the global runtime
+    match runtime::spawn(async move {
+        match conn_clone.send(rust_msg).await {
+            Ok(()) => {
+                (callback_data.callback)(
+                    types::TransportServicesError::Success,
+                    std::ptr::null(),
+                    callback_data.user_data as *mut c_void,
+                );
             }
-        });
-    });
+            Err(e) => {
+                error::set_last_error(&e);
+                let error_code = types::TransportServicesError::from(e);
+                (callback_data.callback)(
+                    error_code,
+                    error::transport_services_get_last_error(),
+                    callback_data.user_data as *mut c_void,
+                );
+            }
+        }
+    }) {
+        Ok(_) => {}
+        Err(e) => {
+            error::set_last_error_string(&e);
+            return types::TransportServicesError::RuntimeError;
+        }
+    }
 
     types::TransportServicesError::Success
 }
@@ -143,22 +157,10 @@ pub unsafe extern "C" fn transport_services_connection_free(handle: *mut Transpo
     }
 }
 
-/// Connection event types for FFI
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub enum TransportServicesConnectionEventType {
-    Ready = 0,
-    EstablishmentError = 1,
-    ConnectionError = 2,
-    PathChange = 3,
-    SoftError = 4,
-    Closed = 5,
-}
-
 /// FFI callback for connection events
 pub type TransportServicesConnectionEventCallback = extern "C" fn(
     connection: *mut TransportServicesHandle,
-    event_type: TransportServicesConnectionEventType,
+    event_type: types::TransportServicesConnectionEventType,
     message: *const c_char,
     user_data: *mut c_void,
 );
@@ -167,7 +169,7 @@ pub type TransportServicesConnectionEventCallback = extern "C" fn(
 #[no_mangle]
 pub unsafe extern "C" fn transport_services_connection_poll_event(
     handle: *mut TransportServicesHandle,
-    event_type: *mut TransportServicesConnectionEventType,
+    event_type: *mut types::TransportServicesConnectionEventType,
     message_buffer: *mut c_char,
     message_buffer_size: usize,
 ) -> c_int {
@@ -186,27 +188,52 @@ pub unsafe extern "C" fn transport_services_connection_poll_event(
         Ok(Some(event)) => {
             let (evt_type, msg) = match event {
                 ConnectionEvent::Ready => (
-                    TransportServicesConnectionEventType::Ready,
+                    types::TransportServicesConnectionEventType::Ready,
                     "Connection established",
                 ),
                 ConnectionEvent::EstablishmentError(ref m) => (
-                    TransportServicesConnectionEventType::EstablishmentError,
+                    types::TransportServicesConnectionEventType::EstablishmentError,
                     m.as_str(),
                 ),
                 ConnectionEvent::ConnectionError(ref m) => (
-                    TransportServicesConnectionEventType::ConnectionError,
+                    types::TransportServicesConnectionEventType::ConnectionError,
                     m.as_str(),
                 ),
                 ConnectionEvent::PathChange => (
-                    TransportServicesConnectionEventType::PathChange,
+                    types::TransportServicesConnectionEventType::PathChange,
                     "Path changed",
                 ),
-                ConnectionEvent::SoftError(ref m) => {
-                    (TransportServicesConnectionEventType::SoftError, m.as_str())
-                }
+                ConnectionEvent::SoftError(ref m) => (
+                    types::TransportServicesConnectionEventType::SoftError,
+                    m.as_str(),
+                ),
                 ConnectionEvent::Closed => (
-                    TransportServicesConnectionEventType::Closed,
+                    types::TransportServicesConnectionEventType::Closed,
                     "Connection closed",
+                ),
+                ConnectionEvent::Sent { .. } => (
+                    types::TransportServicesConnectionEventType::Sent,
+                    "Message sent",
+                ),
+                ConnectionEvent::Expired { .. } => (
+                    types::TransportServicesConnectionEventType::Expired,
+                    "Message expired",
+                ),
+                ConnectionEvent::SendError { .. } => (
+                    types::TransportServicesConnectionEventType::SendError,
+                    "Send error",
+                ),
+                ConnectionEvent::Received { .. } => (
+                    types::TransportServicesConnectionEventType::Received,
+                    "Message received",
+                ),
+                ConnectionEvent::ReceivedPartial { .. } => (
+                    types::TransportServicesConnectionEventType::ReceivedPartial,
+                    "Partial message received",
+                ),
+                ConnectionEvent::ReceiveError { ref error, .. } => (
+                    types::TransportServicesConnectionEventType::Received,
+                    error.as_str(),
                 ),
             };
 

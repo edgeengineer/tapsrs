@@ -40,3 +40,6 @@ bitflags = false
 [parse]
 parse_deps = true
 include = ["transport_services"]
+
+[defines]
+"feature = ffi" = "FFI_FEATURE"

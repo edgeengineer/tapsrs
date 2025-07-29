@@ -170,9 +170,9 @@ This document outlines the phases and steps required to implement the TAPS (Tran
 
 ## Phase 5: Packaging and Distribution
 
-- [ ] Create build scripts (e.g., `build.rs` or shell scripts) to automate the cross-compilation for all target platforms.
-- [ ] Automate the generation of static libraries (`libtransport_services.a`, `transport_services.lib`) for each target architecture.
-- [ ] Use `cbindgen` to automatically generate a C header file (`transport_services.h`) from the FFI layer.
+- [x] Create build scripts (e.g., `build.rs` or shell scripts) to automate the cross-compilation for all target platforms.
+- [x] Automate the generation of static libraries (`libtransport_services.a`, `transport_services.lib`) for each target architecture.
+- [x] Use `cbindgen` to automatically generate a C header file (`transport_services.h`) from the FFI layer.
 - [ ] Create wrapper packages for easy integration into platform-native projects:
     - [ ] A Swift Package that bundles the `.a` and `.h` files for iOS and macOS.
     - [ ] An Android Archive (AAR) that includes the `.so` files for different Android ABIs.
@@ -185,12 +185,12 @@ This document outlines the phases and steps required to implement the TAPS (Tran
         - [ ] Implement language-specific wrapper libraries (Swift Package, NuGet, Python Wheel) that translate the C-FFI into idiomatic async patterns for each language.
     - [ ] **Core FFI Architectural Improvements**:
         - [ ] **Centralize Tokio Runtime**:
-            - [ ] Implement `transport_services_init_runtime()` to create a single, shared, multi-threaded Tokio runtime.
-            - [ ] Implement `transport_services_shutdown_runtime()` to gracefully shut down the shared runtime.
-            - [ ] Refactor all FFI functions to use the shared runtime instead of creating new runtimes and threads per call. This eliminates major performance bottlenecks and potential deadlocks.
+            - [x] Implement `transport_services_init_runtime()` to create a single, shared, multi-threaded Tokio runtime.
+            - [x] Implement `transport_services_shutdown_runtime()` to gracefully shut down the shared runtime.
+            - [x] Refactor all FFI functions to use the shared runtime instead of creating new runtimes and threads per call. This eliminates major performance bottlenecks and potential deadlocks.
         - [ ] **Adopt a Consistent Async Pattern**:
-            - [ ] Ensure all operations that perform I/O are non-blocking and use callbacks.
-            - [ ] The standard pattern should be: `function(..., callback, user_data)`, where `user_data` is a pointer passed back to the callback, allowing wrappers to manage state.
+            - [x] Ensure all operations that perform I/O are non-blocking and use callbacks.
+            - [x] The standard pattern should be: `function(..., callback, user_data)`, where `user_data` is a pointer passed back to the callback, allowing wrappers to manage state.
     - [ ] **Specific FFI Function Modifications and Additions**:
         - [ ] **Connection API**:
             - [ ] **Add Async Receive**: Implement `transport_services_connection_receive(handle: *mut Handle, message_callback: fn(*const Message), error_callback: fn(Error), user_data: *mut c_void)`. This is the most critical missing piece for async data handling.

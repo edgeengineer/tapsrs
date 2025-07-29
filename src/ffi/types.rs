@@ -1,6 +1,6 @@
 //! FFI type definitions
 
-use std::os::raw::{c_char, c_int, c_void};
+use std::os::raw::{c_char, c_void};
 
 /// FFI representation of Preference
 #[repr(C)]
@@ -198,6 +198,7 @@ pub enum TransportServicesError {
     InvalidState = -8,
     SecurityError = -9,
     IoError = -10,
+    RuntimeError = -11,
     Unknown = -99,
 }
 
@@ -227,6 +228,23 @@ impl From<crate::TransportServicesError> for TransportServicesError {
             _ => TransportServicesError::Unknown,
         }
     }
+}
+
+/// Connection event types for FFI
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum TransportServicesConnectionEventType {
+    Ready = 0,
+    EstablishmentError = 1,
+    ConnectionError = 2,
+    PathChange = 3,
+    SoftError = 4,
+    Closed = 5,
+    Sent = 6,
+    Expired = 7,
+    SendError = 8,
+    Received = 9,
+    ReceivedPartial = 10,
 }
 
 /// Callback function types

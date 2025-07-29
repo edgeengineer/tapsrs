@@ -5,7 +5,6 @@ use crate::{
     LocalEndpoint, Preconnection, RemoteEndpoint, SecurityParameters, TransportProperties,
 };
 use std::ffi::CStr;
-use std::os::raw::c_char;
 
 /// Create a new preconnection
 #[no_mangle]
@@ -157,23 +156,43 @@ pub unsafe extern "C" fn transport_services_preconnection_initiate(
     // Clone for moving into async task
     let preconn_clone = preconn.clone();
 
-    // Spawn async task to handle connection
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            match preconn_clone.initiate().await {
-                Ok(connection) => {
-                    let conn_handle = to_handle(Box::new(connection));
-                    callback(conn_handle, user_data);
-                }
-                Err(e) => {
-                    let error_code = types::TransportServicesError::from(e);
-                    let msg = CString::new("Connection initiation failed").unwrap();
-                    error_callback(error_code, msg.as_ptr(), user_data);
-                }
+    // Wrap callbacks in a type that is Send
+    struct CallbackData {
+        callback: types::TransportServicesConnectionCallback,
+        error_callback: types::TransportServicesErrorCallback,
+        user_data: usize,
+    }
+
+    let callback_data = CallbackData {
+        callback,
+        error_callback,
+        user_data: user_data as usize,
+    };
+
+    // Spawn async task to handle connection using the global runtime
+    match runtime::spawn(async move {
+        match preconn_clone.initiate().await {
+            Ok(connection) => {
+                let conn_handle = to_handle(Box::new(connection));
+                (callback_data.callback)(conn_handle, callback_data.user_data as *mut c_void);
             }
-        });
-    });
+            Err(e) => {
+                let error_code = types::TransportServicesError::from(e);
+                let msg = CString::new("Connection initiation failed").unwrap();
+                (callback_data.error_callback)(
+                    error_code,
+                    msg.as_ptr(),
+                    callback_data.user_data as *mut c_void,
+                );
+            }
+        }
+    }) {
+        Ok(_) => {}
+        Err(e) => {
+            error::set_last_error_string(&e);
+            return types::TransportServicesError::RuntimeError;
+        }
+    }
 
     types::TransportServicesError::Success
 }

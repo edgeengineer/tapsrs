@@ -1,10 +1,8 @@
 //! FFI error handling utilities
 
-use super::types::TransportServicesError;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-/// Thread-local storage for last error message
 thread_local! {
     static LAST_ERROR: std::cell::RefCell<Option<CString>> = std::cell::RefCell::new(None);
 }
@@ -13,6 +11,14 @@ thread_local! {
 pub fn set_last_error(err: &crate::TransportServicesError) {
     let msg = format!("{}", err);
     let c_msg = CString::new(msg).unwrap_or_else(|_| CString::new("Unknown error").unwrap());
+    LAST_ERROR.with(|e| {
+        *e.borrow_mut() = Some(c_msg);
+    });
+}
+
+/// Set the last error message from a string
+pub fn set_last_error_string(err: &str) {
+    let c_msg = CString::new(err).unwrap_or_else(|_| CString::new("Unknown error").unwrap());
     LAST_ERROR.with(|e| {
         *e.borrow_mut() = Some(c_msg);
     });

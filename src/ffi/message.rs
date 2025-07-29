@@ -80,7 +80,7 @@ pub unsafe extern "C" fn transport_services_message_set_idempotent(
     }
 
     let message = handle_mut::<Message>(handle);
-    message.properties_mut().idempotent = idempotent;
+    message.properties_mut().safely_replayable = idempotent;
 
     types::TransportServicesError::Success
 }
