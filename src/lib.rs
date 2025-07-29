@@ -12,6 +12,7 @@ pub mod listener;
 pub mod message;
 pub mod preconnection;
 pub mod types;
+pub mod path_monitor;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;
@@ -28,6 +29,7 @@ pub use listener::Listener;
 pub use message::{Message, MessageContext};
 pub use preconnection::Preconnection;
 pub use types::*;
+pub use path_monitor::{NetworkMonitor, Interface, Status, ChangeEvent, MonitorHandle};
 
 #[cfg(test)]
 mod tests;
