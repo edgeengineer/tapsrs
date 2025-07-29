@@ -228,8 +228,25 @@ public extension Listener {
                 do {
                     try await handler(connection)
                 } catch {
-                    // Log error or handle as needed
-                    print("Connection handler error: \(error)")
+                    // Error is silently ignored to prevent crashes
+                    // Users should handle errors in their handler if needed
+                }
+            }
+        }
+    }
+    
+    /// Accept connections with a handler closure and error handler
+    func acceptLoop(
+        handler: @escaping (Connection) async throws -> Void,
+        errorHandler: @escaping (Error) -> Void
+    ) async {
+        for await connection in connections() {
+            // Handle each connection concurrently
+            Task {
+                do {
+                    try await handler(connection)
+                } catch {
+                    errorHandler(error)
                 }
             }
         }
