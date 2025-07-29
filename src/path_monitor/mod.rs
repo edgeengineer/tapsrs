@@ -1,5 +1,5 @@
 //! Network path monitoring implementation for Transport Services
-//! 
+//!
 //! This module provides cross-platform network interface and path monitoring,
 //! allowing applications to track network changes and adapt connections accordingly.
 
@@ -25,12 +25,12 @@ pub mod integration;
 // Common types across platforms
 #[derive(Debug, Clone)]
 pub struct Interface {
-    pub name: String,              // e.g., "en0", "eth0"
-    pub index: u32,                // Interface index
-    pub ips: Vec<IpAddr>,          // List of assigned IPs
-    pub status: Status,            // Up/Down/Unknown
-    pub interface_type: String,    // e.g., "wifi", "ethernet", "cellular"
-    pub is_expensive: bool,        // e.g., metered like cellular
+    pub name: String,           // e.g., "en0", "eth0"
+    pub index: u32,             // Interface index
+    pub ips: Vec<IpAddr>,       // List of assigned IPs
+    pub status: Status,         // Up/Down/Unknown
+    pub interface_type: String, // e.g., "wifi", "ethernet", "cellular"
+    pub is_expensive: bool,     // e.g., metered like cellular
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +45,7 @@ pub enum ChangeEvent {
     Added(Interface),
     Removed(Interface),
     Modified { old: Interface, new: Interface },
-    PathChanged { description: String },  // Generic path change info
+    PathChanged { description: String }, // Generic path change info
 }
 
 // The main API struct
@@ -58,8 +58,8 @@ impl NetworkMonitor {
     /// Create a new monitor
     pub fn new() -> Result<Self, Error> {
         let inner = create_platform_impl()?;
-        Ok(Self { 
-            inner: Arc::new(Mutex::new(inner))
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
         })
     }
 
@@ -76,13 +76,13 @@ impl NetworkMonitor {
     {
         let mut guard = self.inner.lock().unwrap();
         let handle = guard.start_watching(Box::new(callback));
-        MonitorHandle { _inner: handle }  // RAII to stop on drop
+        MonitorHandle { _inner: handle } // RAII to stop on drop
     }
 }
 
 // Handle to stop monitoring (drops the watcher)
 pub struct MonitorHandle {
-    _inner: PlatformHandle,  // Platform-specific drop logic
+    _inner: PlatformHandle, // Platform-specific drop logic
 }
 
 #[derive(Debug)]
@@ -108,10 +108,13 @@ impl std::error::Error for Error {}
 // Platform abstraction trait
 trait PlatformMonitor {
     fn list_interfaces(&self) -> Result<Vec<Interface>, Error>;
-    fn start_watching(&mut self, callback: Box<dyn Fn(ChangeEvent) + Send + 'static>) -> PlatformHandle;
+    fn start_watching(
+        &mut self,
+        callback: Box<dyn Fn(ChangeEvent) + Send + 'static>,
+    ) -> PlatformHandle;
 }
 
-type PlatformHandle = Box<dyn Send>;  // Platform-specific handle
+type PlatformHandle = Box<dyn Send>; // Platform-specific handle
 
 // Platform implementation factory
 #[cfg(target_vendor = "apple")]

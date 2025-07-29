@@ -4,8 +4,8 @@
 mod tests {
     use super::super::*;
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
     use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn test_create_network_monitor() {
@@ -31,7 +31,7 @@ mod tests {
                     Ok(interfaces) => {
                         // Should have at least a loopback interface on most systems
                         assert!(!interfaces.is_empty(), "No interfaces found");
-                        
+
                         // Check that interfaces have required fields
                         for interface in interfaces {
                             assert!(!interface.name.is_empty());
@@ -62,23 +62,26 @@ mod tests {
             Ok(monitor) => {
                 let events = Arc::new(Mutex::new(Vec::new()));
                 let events_clone = events.clone();
-                
+
                 {
                     let _handle = monitor.watch_changes(move |event| {
                         events_clone.lock().unwrap().push(format!("{:?}", event));
                     });
                     // Handle is dropped here
                 }
-                
+
                 // Give some time for cleanup
                 thread::sleep(Duration::from_millis(100));
-                
+
                 // No more events should be received after handle is dropped
                 let initial_count = events.lock().unwrap().len();
                 thread::sleep(Duration::from_millis(100));
                 let final_count = events.lock().unwrap().len();
-                
-                assert_eq!(initial_count, final_count, "Events received after handle dropped");
+
+                assert_eq!(
+                    initial_count, final_count,
+                    "Events received after handle dropped"
+                );
             }
             Err(Error::NotSupported) => {
                 // Skip test on unsupported platforms

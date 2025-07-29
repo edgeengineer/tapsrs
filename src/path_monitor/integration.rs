@@ -1,5 +1,5 @@
 //! Integration with Transport Services Connection API
-//! 
+//!
 //! This module shows how path monitoring integrates with the
 //! Transport Services Connection establishment and management.
 
@@ -11,7 +11,7 @@ use std::sync::Weak;
 pub trait ConnectionPathMonitoring {
     /// Enable automatic path migration based on network changes
     fn enable_path_monitoring(&self) -> Result<MonitorHandle, Error>;
-    
+
     /// Get current network path information
     fn get_current_path(&self) -> Option<Interface>;
 }
@@ -29,22 +29,22 @@ impl PathAwareConnectionManager {
             connections: Arc::new(Mutex::new(Vec::new())),
         })
     }
-    
+
     /// Register a connection for path monitoring
     pub fn register_connection(&self, conn: Weak<Connection>) {
         self.connections.lock().unwrap().push(conn);
     }
-    
+
     /// Start monitoring and managing paths for all connections
     pub fn start_monitoring(&self) -> MonitorHandle {
         let connections = self.connections.clone();
-        
+
         self.monitor.watch_changes(move |event| {
             let mut conns = connections.lock().unwrap();
-            
+
             // Clean up dead weak references
             conns.retain(|conn| conn.strong_count() > 0);
-            
+
             // Handle the event for each connection
             for conn_weak in conns.iter() {
                 if let Some(_conn) = conn_weak.upgrade() {
@@ -69,12 +69,12 @@ impl PathAwareConnectionManager {
             }
         })
     }
-    
+
     /// Get available paths for a connection
     pub fn get_available_paths(&self) -> Result<Vec<Interface>, Error> {
         self.monitor.list_interfaces()
     }
-    
+
     /// Select best path based on connection requirements
     pub fn select_best_path(
         &self,
@@ -82,32 +82,32 @@ impl PathAwareConnectionManager {
         avoid_expensive: bool,
     ) -> Result<Option<Interface>, Error> {
         let interfaces = self.monitor.list_interfaces()?;
-        
+
         let mut candidates: Vec<_> = interfaces
             .into_iter()
             .filter(|iface| {
-                iface.status == Status::Up &&
-                !iface.ips.is_empty() &&
-                iface.interface_type != "loopback"
+                iface.status == Status::Up
+                    && !iface.ips.is_empty()
+                    && iface.interface_type != "loopback"
             })
             .collect();
-        
+
         if avoid_expensive {
             candidates.retain(|iface| !iface.is_expensive);
         }
-        
+
         if prefer_wifi {
             // Sort to put wifi interfaces first
-            candidates.sort_by(|a, b| {
-                match (&a.interface_type[..], &b.interface_type[..]) {
+            candidates.sort_by(
+                |a, b| match (&a.interface_type[..], &b.interface_type[..]) {
                     ("wifi", "wifi") => std::cmp::Ordering::Equal,
                     ("wifi", _) => std::cmp::Ordering::Less,
                     (_, "wifi") => std::cmp::Ordering::Greater,
                     _ => std::cmp::Ordering::Equal,
-                }
-            });
+                },
+            );
         }
-        
+
         Ok(candidates.into_iter().next())
     }
 }
