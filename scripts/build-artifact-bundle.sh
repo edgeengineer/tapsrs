@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Build script for creating Transport Services artifact bundle
-# Supports all target platforms: iOS, tvOS, macOS, watchOS, Android ARM64 Only, Linux x86_64 and ARM64, Windows x86_64 and ARM64
+# Supports all target platforms: iOS, tvOS, macOS, watchOS, visionOS (devices and simulators for Apple Silicon),
+# Android ARM64, Linux x86_64 and ARM64, Windows x86_64 and ARM64
 
 set -euo pipefail
 
@@ -15,11 +16,20 @@ VERSION="0.1.0"
 
 # Target platforms and architectures
 declare -A TARGETS=(
+    # Apple device targets
     ["ios-arm64"]="aarch64-apple-ios"
     ["tvos-arm64"]="aarch64-apple-tvos"
     ["macos-arm64"]="aarch64-apple-darwin"
-    ["macos-x86_64"]="x86_64-apple-darwin"
     ["watchos-arm64"]="aarch64-apple-watchos"
+    ["visionos-arm64"]="aarch64-apple-visionos"
+    
+    # Apple simulator targets (Apple Silicon only)
+    ["ios-sim-arm64"]="aarch64-apple-ios-sim"
+    ["tvos-sim-arm64"]="aarch64-apple-tvos-sim"
+    ["watchos-sim-arm64"]="aarch64-apple-watchos-sim"
+    ["visionos-sim-arm64"]="aarch64-apple-visionos-sim"
+    
+    # Other platforms
     ["android-arm64"]="aarch64-linux-android"
     ["linux-x86_64"]="x86_64-unknown-linux-gnu"
     ["linux-arm64"]="aarch64-unknown-linux-gnu"
@@ -78,7 +88,7 @@ build_target() {
     
     # Set up cross-compilation environment
     case "$platform" in
-        ios-*|tvos-*|macos-*|watchos-*)
+        ios-*|tvos-*|macos-*|watchos-*|visionos-*)
             # Apple platforms - use default toolchain
             ;;
         android-*)
@@ -178,7 +188,7 @@ create_bundle_index() {
     
     local bundles_json=""
     local bundle_groups=(
-        "apple:ios-arm64,tvos-arm64,macos-arm64,macos-x86_64,watchos-arm64"
+        "apple:ios-arm64,tvos-arm64,macos-arm64,watchos-arm64,visionos-arm64,ios-sim-arm64,tvos-sim-arm64,watchos-sim-arm64,visionos-sim-arm64"
         "android:android-arm64"
         "linux:linux-x86_64,linux-arm64"
         "windows:windows-x86_64,windows-arm64"

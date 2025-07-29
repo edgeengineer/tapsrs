@@ -87,8 +87,6 @@ public struct MessageContext: Sendable {
 public actor Connection {
     private let handle: OpaquePointer
     private var eventContinuation: AsyncStream<ConnectionEvent>.Continuation?
-    private var receiveContinuations: [CheckedContinuation<Data, Error>] = []
-    private var sendContinuations: [CheckedContinuation<Void, Error>] = []
     private var isClosed = false
     
     /// Current connection state
@@ -132,49 +130,46 @@ public actor Connection {
         }
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            sendContinuations.append(continuation)
-            
-            // Create FFI message
-            var ffiMessage = TransportServicesMessage()
-            ffiMessage.data = message.data.withUnsafeBytes { $0.baseAddress }
-            ffiMessage.length = message.data.count
-            
-            if let context = message.context {
-                if let lifetime = context.messageLifetime {
-                    ffiMessage.lifetime_ms = UInt64(lifetime * 1000)
-                }
-                if let priority = context.priority {
-                    ffiMessage.priority = Int32(priority)
-                }
-                ffiMessage.is_end_of_message = context.isEndOfMessage
-            } else {
-                ffiMessage.is_end_of_message = true
-            }
-            
-            // Set up callback
-            let callbackContext = Unmanaged.passRetained(ConnectionCallbackContext { [weak self] error in
-                Task { [weak self] in
-                    await self?.handleSendComplete(error: error)
-                }
-            })
-            
-            let result = transport_services_connection_send(
-                handle,
-                &ffiMessage,
-                { error, userData in
-                    guard let userData = userData else { return }
-                    let context = Unmanaged<ConnectionCallbackContext>.fromOpaque(userData).takeRetainedValue()
-                    context.callback(error)
-                },
-                callbackContext.toOpaque()
-            )
-            
-            if result != TRANSPORT_SERVICES_ERROR_NONE {
-                callbackContext.release()
-                sendContinuations.removeLast()
+            message.data.withUnsafeBytes { dataBufferPointer in
+                var ffiMessage = TransportServicesMessage()
+                ffiMessage.data = dataBufferPointer.baseAddress
+                ffiMessage.length = message.data.count
                 
-                let errorMessage = TransportServices.getLastError() ?? "Send failed"
-                continuation.resume(throwing: TransportServicesError.sendFailed(message: errorMessage))
+                if let context = message.context {
+                    if let lifetime = context.messageLifetime {
+                        ffiMessage.lifetime_ms = UInt64(lifetime * 1000)
+                    }
+                    if let priority = context.priority {
+                        ffiMessage.priority = Int32(priority)
+                    }
+                    ffiMessage.is_end_of_message = context.isEndOfMessage
+                } else {
+                    ffiMessage.is_end_of_message = true
+                }
+                
+                let sendContext = Unmanaged.passRetained(SendContinuationContext(continuation: continuation))
+                
+                let result = transport_services_connection_send(
+                    handle,
+                    &ffiMessage,
+                    { error, _, userData in // message pointer is ignored here
+                        guard let userData = userData else { return }
+                        let context = Unmanaged<SendContinuationContext>.fromOpaque(userData).takeRetainedValue()
+                        if error == TRANSPORT_SERVICES_ERROR_NONE {
+                            context.continuation.resume()
+                        } else {
+                            let errorMessage = TransportServices.getLastError() ?? "Send failed with code \(error)"
+                            context.continuation.resume(throwing: TransportServicesError.sendFailed(message: errorMessage))
+                        }
+                    },
+                    sendContext.toOpaque()
+                )
+                
+                if result != TRANSPORT_SERVICES_ERROR_NONE {
+                    sendContext.release()
+                    let errorMessage = TransportServices.getLastError() ?? "Send failed"
+                    continuation.resume(throwing: TransportServicesError.sendFailed(message: errorMessage))
+                }
             }
         }
     }
@@ -199,35 +194,28 @@ public actor Connection {
         }
         
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-            receiveContinuations.append(continuation)
-            
-            // Set up callback
-            let callbackContext = Unmanaged.passRetained(ConnectionReceiveContext { [weak self] data, error in
-                Task { [weak self] in
-                    await self?.handleReceiveComplete(data: data, error: error)
-                }
-            })
+            let receiveContext = Unmanaged.passRetained(ReceiveContinuationContext(continuation: continuation))
             
             transport_services_connection_receive(
                 handle,
                 { messagePtr, error, userData in
                     guard let userData = userData else { return }
-                    let context = Unmanaged<ConnectionReceiveContext>.fromOpaque(userData).takeRetainedValue()
+                    let context = Unmanaged<ReceiveContinuationContext>.fromOpaque(userData).takeRetainedValue()
                     
                     if let messagePtr = messagePtr {
                         let message = messagePtr.pointee
                         if let dataPtr = message.data, message.length > 0 {
                             let data = Data(bytes: dataPtr, count: message.length)
-                            context.callback(data, nil)
+                            context.continuation.resume(returning: data)
                         } else {
-                            context.callback(nil, TransportServicesError.receiveFailed(message: "Empty message"))
+                            context.continuation.resume(throwing: TransportServicesError.receiveFailed(message: "Empty message received"))
                         }
                     } else {
-                        let errorMessage = TransportServices.getLastError() ?? "Receive failed"
-                        context.callback(nil, TransportServicesError.receiveFailed(message: errorMessage))
+                        let errorMessage = TransportServices.getLastError() ?? "Receive failed with code \(error)"
+                        context.continuation.resume(throwing: TransportServicesError.receiveFailed(message: errorMessage))
                     }
                 },
-                callbackContext.toOpaque()
+                receiveContext.toOpaque()
             )
         }
     }
@@ -238,17 +226,6 @@ public actor Connection {
         
         isClosed = true
         state = .closing
-        
-        // Cancel all pending operations
-        for continuation in receiveContinuations {
-            continuation.resume(throwing: TransportServicesError.connectionClosed)
-        }
-        receiveContinuations.removeAll()
-        
-        for continuation in sendContinuations {
-            continuation.resume(throwing: TransportServicesError.connectionClosed)
-        }
-        sendContinuations.removeAll()
         
         // Close the connection
         transport_services_connection_close(handle)
@@ -275,50 +252,19 @@ public actor Connection {
         // TODO: Set up FFI event callbacks
     }
     
-    private func handleSendComplete(error: TransportServicesError?) {
-        guard let continuation = sendContinuations.first else { return }
-        sendContinuations.removeFirst()
-        
-        if let error = error {
-            continuation.resume(throwing: error)
-            eventContinuation?.yield(.sendError(error))
-        } else {
-            continuation.resume()
-            eventContinuation?.yield(.sent)
-        }
-    }
-    
-    private func handleReceiveComplete(data: Data?, error: Error?) {
-        guard let continuation = receiveContinuations.first else { return }
-        receiveContinuations.removeFirst()
-        
-        if let data = data {
-            continuation.resume(returning: data)
-            eventContinuation?.yield(.received(data))
-        } else if let error = error {
-            continuation.resume(throwing: error)
-        } else {
-            continuation.resume(throwing: TransportServicesError.receiveFailed(message: "No data"))
-        }
     }
 }
 
 // MARK: - Callback Contexts
 
-/// Context for connection callbacks
-private final class ConnectionCallbackContext {
-    let callback: (TransportServicesError?) -> Void
-    
-    init(callback: @escaping (TransportServicesError?) -> Void) {
-        self.callback = callback
-    }
+/// Context for send continuations
+private final class SendContinuationContext {
+    let continuation: CheckedContinuation<Void, Error>
+    init(continuation: CheckedContinuation<Void, Error>) { self.continuation = continuation }
 }
 
-/// Context for receive callbacks
-private final class ConnectionReceiveContext {
-    let callback: (Data?, Error?) -> Void
-    
-    init(callback: @escaping (Data?, Error?) -> Void) {
-        self.callback = callback
-    }
+/// Context for receive continuations
+private final class ReceiveContinuationContext {
+    let continuation: CheckedContinuation<Data, Error>
+    init(continuation: CheckedContinuation<Data, Error>) { self.continuation = continuation }
 }
