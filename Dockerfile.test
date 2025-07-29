@@ -1,0 +1,20 @@
+FROM rust:1.83-slim
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    cmake \
+    nasm \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the project files
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY spec ./spec
+
+# Run tests
+CMD ["cargo", "test"]
