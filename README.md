@@ -180,6 +180,22 @@ int main() {
 
 Contributions are welcome! Please feel free to open an issue or submit a pull request.
 
+### Setting Up Git Hooks
+
+This project uses git hooks to ensure code quality. To set up the pre-commit hook that runs `cargo fmt`:
+
+**On Unix/Linux/macOS:**
+```bash
+./setup-hooks.sh
+```
+
+**On Windows:**
+```cmd
+setup-hooks.bat
+```
+
+This will configure git to run `cargo fmt --check` before each commit, ensuring all code is properly formatted.
+
 ## License
 
 This project is licensed under the MIT License.
