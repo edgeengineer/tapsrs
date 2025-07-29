@@ -130,10 +130,15 @@ async fn test_close_delivers_pending_messages() {
 
         // Should receive Closed event after all messages are delivered
         let mut sent_count = 0;
+        let mut received_count = 0;
         loop {
             match conn.next_event().await {
                 Some(ConnectionEvent::Sent { .. }) => {
                     sent_count += 1;
+                }
+                Some(ConnectionEvent::Received { .. }) => {
+                    // Echo server may send back messages before close completes
+                    received_count += 1;
                 }
                 Some(ConnectionEvent::Closed) => {
                     break;
@@ -144,6 +149,8 @@ async fn test_close_delivers_pending_messages() {
 
         // Should have sent all messages before closing
         assert_eq!(sent_count, 5);
+        // May have received some or all echoed messages
+        assert!(received_count <= 5);
     })
     .await
     .expect("Test should complete within timeout");
