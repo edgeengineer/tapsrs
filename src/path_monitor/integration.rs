@@ -5,7 +5,6 @@
 
 use super::*;
 use crate::connection::Connection;
-use crate::preconnection::Preconnection;
 use std::sync::Weak;
 
 /// Extension trait for Connection to support path monitoring

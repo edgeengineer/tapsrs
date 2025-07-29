@@ -6,8 +6,6 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 // Platform-specific implementations
 #[cfg(target_vendor = "apple")]
@@ -113,7 +111,7 @@ trait PlatformMonitor {
     fn start_watching(&mut self, callback: Box<dyn Fn(ChangeEvent) + Send + 'static>) -> PlatformHandle;
 }
 
-type PlatformHandle = Box<dyn Drop + Send>;  // Platform-specific handle
+type PlatformHandle = Box<dyn Send>;  // Platform-specific handle
 
 // Platform implementation factory
 #[cfg(target_vendor = "apple")]
