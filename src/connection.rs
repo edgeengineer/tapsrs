@@ -869,8 +869,10 @@ impl Connection {
             }
             "keepAliveTimeout" => {
                 // Configure keep-alive on TCP stream
-                if let Some(ref _stream) = inner.tcp_stream {
-                    if let ConnectionProperty::KeepAliveTimeout(_timeout_val) = &value {
+                #[allow(unused_variables)]
+                if let Some(ref stream) = inner.tcp_stream {
+                    #[allow(unused_variables)]
+                    if let ConnectionProperty::KeepAliveTimeout(timeout_val) = &value {
                         // Get the raw socket to set keep-alive options
                         #[cfg(unix)]
                         {
@@ -884,8 +886,8 @@ impl Connection {
                                 TimeoutValue::Duration(duration) => {
                                     // Enable keep-alive with the specified interval
                                     let keepalive = TcpKeepalive::new()
-                                        .with_time(*duration)
-                                        .with_interval(*duration);
+                                        .with_time(duration.clone())
+                                        .with_interval(duration.clone());
 
                                     if let Err(e) = socket.set_tcp_keepalive(&keepalive) {
                                         log::warn!("Failed to set TCP keep-alive: {e}");
@@ -1245,7 +1247,7 @@ impl Connection {
     }
 
     /// Get the TCP Maximum Segment Size (MSS) from a TcpStream
-    async fn get_tcp_mss(&self, _stream: &TcpStream) -> Result<usize> {
+    async fn get_tcp_mss(&self, #[allow(unused_variables)] stream: &TcpStream) -> Result<usize> {
         #[cfg(unix)]
         {
             use std::os::unix::io::{AsRawFd, FromRawFd};
