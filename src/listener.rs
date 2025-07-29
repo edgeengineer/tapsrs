@@ -104,7 +104,7 @@ impl Listener {
         tokio::spawn(async move {
             // Signal that we're ready to accept connections
             let _ = ready_tx.send(());
-            
+
             loop {
                 if !active.load(Ordering::Relaxed) {
                     break;
