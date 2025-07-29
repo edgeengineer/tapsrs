@@ -214,12 +214,8 @@ async fn test_listener_event_stream() {
     let mut listener = preconn.listen().await.unwrap();
     let bound_addr = listener.local_addr().await.unwrap();
 
-    // Small delay to ensure accept loop is ready
-    sleep(Duration::from_millis(10)).await;
-
     // Connect and check event
     tokio::spawn(async move {
-        sleep(Duration::from_millis(10)).await;
         let _ = TcpStream::connect(bound_addr).await;
     });
 
