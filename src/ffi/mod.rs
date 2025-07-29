@@ -5,6 +5,7 @@ pub mod connection;
 pub mod error;
 pub mod listener;
 pub mod message;
+pub mod path_monitor;
 pub mod preconnection;
 pub mod runtime;
 pub mod security_parameters;
