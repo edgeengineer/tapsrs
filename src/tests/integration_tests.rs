@@ -56,7 +56,7 @@ async fn test_multiple_connections() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),
@@ -113,7 +113,7 @@ async fn test_transport_properties_application() {
             .connection_priority(100)
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             props,
@@ -157,7 +157,7 @@ async fn test_connection_with_local_endpoint() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![local],
             vec![remote],
             TransportProperties::default(),
@@ -193,7 +193,7 @@ async fn test_connection_clone_group() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),
@@ -247,7 +247,7 @@ async fn test_hostname_resolution() {
         .port(server_addr.port())
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -298,7 +298,7 @@ async fn test_multicast_endpoint() {
         .hop_limit(1)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -322,7 +322,7 @@ async fn test_protocol_specific_endpoint() {
         .protocol(Protocol::TCP)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![tcp_remote],
         TransportProperties::default(),
@@ -353,7 +353,7 @@ async fn test_listener_accept_connection() {
         .port(0)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![],
         TransportProperties::default(),
@@ -390,7 +390,7 @@ async fn test_client_server_data_exchange() {
         .port(0)
         .build();
 
-    let server_preconn = new_preconnection(
+    let server_preconn = Preconnection::new(
         vec![local],
         vec![],
         TransportProperties::default(),
@@ -419,7 +419,7 @@ async fn test_client_server_data_exchange() {
         .port(listen_addr.port())
         .build();
 
-    let client_preconn = new_preconnection(
+    let client_preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -455,7 +455,7 @@ async fn test_listener_multiple_clients() {
         .port(0)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![],
         TransportProperties::default(),
@@ -513,7 +513,7 @@ async fn test_listener_connection_limit_integration() {
         .port(0)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![],
         TransportProperties::default(),
@@ -571,7 +571,7 @@ async fn test_rendezvous_peer_to_peer() {
         .port(0) // Will be updated with peer B's actual port
         .build();
 
-    let preconn_a = new_preconnection(
+    let preconn_a = Preconnection::new(
         vec![peer_a_local],
         vec![peer_a_remote],
         TransportProperties::default(),
@@ -592,7 +592,7 @@ async fn test_rendezvous_peer_to_peer() {
         .socket_address(addr_a) // Connect to peer A
         .build();
 
-    let preconn_b = new_preconnection(
+    let preconn_b = Preconnection::new(
         vec![peer_b_local],
         vec![peer_b_remote],
         TransportProperties::default(),
@@ -651,7 +651,7 @@ async fn test_rendezvous_with_transport_properties() {
         .port(54327) // Non-listening port
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         props,
@@ -690,7 +690,7 @@ async fn test_message_properties_integration() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -795,7 +795,7 @@ async fn test_full_send_receive_flow() {
             .socket_address(server_addr)
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),

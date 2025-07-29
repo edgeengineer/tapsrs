@@ -29,7 +29,7 @@ async fn test_background_reading_receives_messages() {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -103,7 +103,7 @@ async fn test_background_reading_with_framing() {
     });
 
     // Create connection with framing
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -164,7 +164,7 @@ async fn test_background_reading_handles_connection_close() {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -235,7 +235,7 @@ async fn test_background_reading_concurrent_with_receive() {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),

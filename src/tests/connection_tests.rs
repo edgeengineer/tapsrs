@@ -39,7 +39,7 @@ async fn test_connection_establishment() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),
@@ -84,7 +84,7 @@ async fn test_connection_send_receive() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),
@@ -123,7 +123,7 @@ async fn test_connection_events() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),
@@ -172,7 +172,7 @@ async fn test_connection_timeout() {
         .port(12345)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -225,7 +225,7 @@ async fn test_queued_messages() {
             .port(server_addr.port())
             .build();
 
-        let preconn = new_preconnection(
+        let preconn = Preconnection::new(
             vec![],
             vec![remote],
             TransportProperties::default(),

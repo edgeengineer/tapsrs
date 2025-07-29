@@ -2,7 +2,7 @@ use crate::*;
 
 #[tokio::test]
 async fn test_new_preconnection() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![],
         TransportProperties::default(),
@@ -24,7 +24,7 @@ async fn test_preconnection_with_endpoints() {
         .port(8080)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -97,7 +97,7 @@ async fn test_security_parameters() {
         .build();
 
     // Test with disabled security
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote.clone()],
         TransportProperties::default(),
@@ -106,7 +106,7 @@ async fn test_security_parameters() {
     assert!(preconn.resolve().await.is_ok());
 
     // Test with opportunistic security
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote.clone()],
         TransportProperties::default(),
@@ -125,7 +125,7 @@ async fn test_security_parameters() {
         SecurityParameterValue::Strings(vec!["h2".to_string(), "http/1.1".to_string()]),
     );
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),

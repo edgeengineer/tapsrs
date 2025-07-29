@@ -19,7 +19,7 @@ async fn test_group_wide_property_update() {
     });
 
     // Create first connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -106,7 +106,7 @@ async fn test_conn_priority_not_shared() {
     });
 
     // Create first connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -172,7 +172,7 @@ async fn test_keepalive_timeout_setting() {
     });
 
     // Create connection
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder().socket_address(addr).build()],
         TransportProperties::default(),
@@ -232,7 +232,7 @@ async fn test_keepalive_timeout_setting() {
 #[tokio::test]
 async fn test_connection_timeout_setting() {
     // Create a connection without actually connecting
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .hostname("example.com")

@@ -1,8 +1,8 @@
 //! Unit tests for Rendezvous functionality
 
 use crate::{
-    preconnection::new_preconnection, ConnectionState, EndpointIdentifier, LocalEndpoint,
-    RemoteEndpoint, SecurityParameters, TransportProperties,
+    ConnectionState, EndpointIdentifier, LocalEndpoint, Preconnection, RemoteEndpoint,
+    SecurityParameters, TransportProperties,
 };
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
@@ -10,7 +10,7 @@ use tokio::time::{sleep, timeout};
 #[tokio::test]
 async fn test_rendezvous_requires_endpoints() {
     // Test with no local endpoints
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![], // No local endpoints
         vec![RemoteEndpoint {
             identifiers: vec![EndpointIdentifier::Port(8080)],
@@ -28,7 +28,7 @@ async fn test_rendezvous_requires_endpoints() {
         .contains("No local endpoints"));
 
     // Test with no remote endpoints
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![LocalEndpoint {
             identifiers: vec![EndpointIdentifier::Port(8080)],
         }],
@@ -62,7 +62,7 @@ async fn test_rendezvous_basic() {
         protocol: None,
     };
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -99,7 +99,7 @@ async fn test_rendezvous_resolve() {
         protocol: None,
     };
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -145,7 +145,7 @@ async fn test_rendezvous_simultaneous_connect() {
         protocol: None,
     };
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -196,7 +196,7 @@ async fn test_rendezvous_incoming_connection() {
         protocol: None,
     };
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![local],
         vec![remote],
         TransportProperties::default(),
@@ -264,7 +264,7 @@ async fn test_rendezvous_multiple_endpoints() {
         },
     ];
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         locals,
         remotes,
         TransportProperties::default(),

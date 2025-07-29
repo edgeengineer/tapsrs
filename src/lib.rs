@@ -26,7 +26,7 @@ pub use error::{Result, TransportServicesError};
 pub use framer::{Framer, FramerStack, LengthPrefixFramer};
 pub use listener::Listener;
 pub use message::{Message, MessageContext};
-pub use preconnection::{new_preconnection, Preconnection};
+pub use preconnection::Preconnection;
 pub use types::*;
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 //! Unit tests for Connection Groups functionality
 
 use crate::{
-    preconnection::new_preconnection, ConnectionGroup, ConnectionState, LocalEndpoint, Preference,
-    RemoteEndpoint, SecurityParameters, TransportProperties,
+    ConnectionGroup, ConnectionState, LocalEndpoint, Preconnection, Preference, RemoteEndpoint,
+    SecurityParameters, TransportProperties,
 };
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -18,7 +18,7 @@ async fn test_connection_clone_basic() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -87,7 +87,7 @@ async fn test_connection_clone_basic() {
 
 #[tokio::test]
 async fn test_connection_clone_only_established() {
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .ip_address("127.0.0.1".parse().unwrap())
@@ -132,7 +132,7 @@ async fn test_connection_group_shared_properties() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(vec![], vec![remote], props, SecurityParameters::default());
+    let preconn = Preconnection::new(vec![], vec![remote], props, SecurityParameters::default());
 
     // Create initial connection
     let conn1 = preconn.initiate().await.unwrap();
@@ -180,7 +180,7 @@ async fn test_connection_group_multiple_clones() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -250,7 +250,7 @@ async fn test_connection_group_close() {
         .socket_address(server_addr)
         .build();
 
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![remote],
         TransportProperties::default(),
@@ -284,7 +284,7 @@ async fn test_connection_group_close() {
 #[tokio::test]
 async fn test_connection_without_group() {
     // Create a connection that won't be cloned
-    let preconn = new_preconnection(
+    let preconn = Preconnection::new(
         vec![],
         vec![RemoteEndpoint::builder()
             .ip_address("127.0.0.1".parse().unwrap())
