@@ -3,244 +3,321 @@
 //! Uses ConnectivityManager for monitoring network changes.
 
 use super::*;
-use jni::sys::{jint, jobject};
-use jni::{
-    objects::{GlobalRef, JObject, JValue},
-    JNIEnv, JavaVM,
-};
-use std::sync::Arc;
+use jni::{objects::{GlobalRef, JObject, JValue}, JNIEnv, JavaVM};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
-pub struct AndroidMonitor {
-    jvm: Arc<JavaVM>,
-    connectivity_manager: Option<GlobalRef>,
-    network_callback: Option<GlobalRef>,
-    callback_holder: Option<Arc<Mutex<Box<dyn Fn(ChangeEvent) + Send + 'static>>>>,
+static STATE: OnceLock<Arc<Mutex<State>>> = OnceLock::new();
+
+struct State {
+    watchers: HashMap<WatcherId, Box<dyn Fn(ChangeEvent) + Send + 'static>>,
+    current_interfaces: Vec<Interface>,
+    next_watcher_id: usize,
+    java_support: Option<JavaSupport>,
 }
 
-unsafe impl Send for AndroidMonitor {}
-unsafe impl Sync for AndroidMonitor {}
+struct JavaSupport {
+    jvm: JavaVM,
+    support_object: GlobalRef,
+}
+
+type WatcherId = usize;
+
+pub struct AndroidMonitor {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+pub struct AndroidWatchHandle {
+    id: WatcherId,
+}
+
+impl Drop for AndroidWatchHandle {
+    fn drop(&mut self) {
+        if let Some(state_ref) = STATE.get() {
+            let mut state = state_ref.lock().unwrap();
+            state.watchers.remove(&self.id);
+
+            if state.watchers.is_empty() {
+                if let Some(ref support) = state.java_support {
+                    let _ = stop_java_watching(support);
+                }
+                state.java_support = None;
+            }
+        }
+    }
+}
 
 impl PlatformMonitor for AndroidMonitor {
     fn list_interfaces(&self) -> Result<Vec<Interface>, Error> {
-        let mut env = self
-            .jvm
-            .attach_current_thread()
+        // Get JVM and context from android_context
+        let (vm_ptr, _context_ptr) = android_context()
+            .ok_or_else(|| Error::PlatformError("Android context not set".into()))?;
+        
+        let jvm = unsafe { JavaVM::from_raw(vm_ptr as *mut jni::sys::JavaVM) }
+            .map_err(|e| Error::PlatformError(format!("Failed to get JavaVM: {:?}", e)))?;
+        
+        let mut env = jvm.attach_current_thread()
             .map_err(|e| Error::PlatformError(format!("Failed to attach thread: {:?}", e)))?;
-
-        let connectivity_manager = self
-            .connectivity_manager
-            .as_ref()
-            .ok_or_else(|| Error::PlatformError("ConnectivityManager not initialized".into()))?;
-
-        // Get all networks
-        let networks = env
-            .call_method(
-                connectivity_manager.as_obj(),
-                "getAllNetworks",
-                "()[Landroid/net/Network;",
-                &[],
-            )
-            .map_err(|e| Error::PlatformError(format!("Failed to get networks: {:?}", e)))?;
-
-        let networks_array = networks
-            .l()
-            .map_err(|e| Error::PlatformError(format!("Failed to get networks array: {:?}", e)))?;
-
-        let mut interfaces = Vec::new();
-
-        // Process each network
-        let array_len = env
-            .get_array_length(networks_array.into())
-            .map_err(|e| Error::PlatformError(format!("Failed to get array length: {:?}", e)))?;
-
-        for i in 0..array_len {
-            let network = env
-                .get_object_array_element(networks_array.into(), i)
-                .map_err(|e| {
-                    Error::PlatformError(format!("Failed to get network element: {:?}", e))
-                })?;
-
-            if network.is_null() {
-                continue;
-            }
-
-            // Get network capabilities
-            let net_caps = env
-                .call_method(
-                    connectivity_manager.as_obj(),
-                    "getNetworkCapabilities",
-                    "(Landroid/net/Network;)Landroid/net/NetworkCapabilities;",
-                    &[JValue::Object(network)],
-                )
-                .map_err(|e| {
-                    Error::PlatformError(format!("Failed to get capabilities: {:?}", e))
-                })?;
-
-            if let Ok(caps) = net_caps.l() {
-                if !caps.is_null() {
-                    let interface = parse_network_capabilities(&mut env, caps)?;
-                    interfaces.push(interface);
-                }
-            }
-        }
-
-        Ok(interfaces)
+        
+        // Call into Java to get network interfaces
+        list_interfaces_jni(&mut env)
     }
 
     fn start_watching(
         &mut self,
         callback: Box<dyn Fn(ChangeEvent) + Send + 'static>,
     ) -> PlatformHandle {
-        self.callback_holder = Some(Arc::new(Mutex::new(callback)));
+        let state_ref = STATE.get_or_init(|| {
+            Arc::new(Mutex::new(State {
+                watchers: HashMap::new(),
+                current_interfaces: Vec::new(),
+                next_watcher_id: 1,
+                java_support: None,
+            }))
+        });
 
-        let env = match self.jvm.attach_current_thread() {
-            Ok(env) => env,
-            Err(_) => return Box::new(AndroidMonitorHandle),
+        // Get current interfaces
+        let current_list = match self.list_interfaces() {
+            Ok(list) => list,
+            Err(_) => Vec::new(),
         };
 
-        // Create NetworkCallback
-        match create_network_callback(&env, self.callback_holder.as_ref().unwrap().clone()) {
-            Ok(callback) => {
-                self.network_callback = Some(callback);
-
-                // Register callback with ConnectivityManager
-                if let Some(cm) = &self.connectivity_manager {
-                    let _ = env.call_method(
-                        cm.as_obj(),
-                        "registerDefaultNetworkCallback",
-                        "(Landroid/net/ConnectivityManager$NetworkCallback;)V",
-                        &[JValue::Object(
-                            self.network_callback.as_ref().unwrap().as_obj(),
-                        )],
-                    );
-                }
-            }
-            Err(_) => {}
+        // Send initial events for all current interfaces
+        for interface in &current_list {
+            callback(ChangeEvent::Added(interface.clone()));
         }
 
-        Box::new(AndroidMonitorHandle)
+        let mut state = state_ref.lock().unwrap();
+        let id = state.next_watcher_id;
+        state.next_watcher_id += 1;
+        state.current_interfaces = current_list;
+        let is_first_watcher = state.watchers.is_empty();
+        state.watchers.insert(id, callback);
+        
+        if is_first_watcher {
+            let _ = start_java_watching(&mut state);
+        }
+        
+        Box::new(AndroidWatchHandle { id })
     }
 }
 
-struct AndroidMonitorHandle;
-
-impl Drop for AndroidMonitorHandle {
-    fn drop(&mut self) {
-        // Unregister callback
-    }
+fn list_interfaces_jni(_env: &mut JNIEnv) -> Result<Vec<Interface>, Error> {
+    // This would call into Java code to get the list of network interfaces
+    // For now, return an empty list as this requires Java-side implementation
+    Ok(Vec::new())
 }
 
-fn parse_network_capabilities(env: &mut JNIEnv, caps: JObject) -> Result<Interface, Error> {
-    // Check transport type
-    let has_wifi = env
-        .call_method(
-            caps,
-            "hasTransport",
-            "(I)Z",
-            &[JValue::Int(1)], // TRANSPORT_WIFI
-        )
-        .map_err(|e| Error::PlatformError(format!("Failed to check wifi: {:?}", e)))?
-        .z()
-        .unwrap_or(false);
-
-    let has_cellular = env
-        .call_method(
-            caps,
-            "hasTransport",
-            "(I)Z",
-            &[JValue::Int(0)], // TRANSPORT_CELLULAR
-        )
-        .map_err(|e| Error::PlatformError(format!("Failed to check cellular: {:?}", e)))?
-        .z()
-        .unwrap_or(false);
-
-    let interface_type = if has_wifi {
-        "wifi".to_string()
-    } else if has_cellular {
-        "cellular".to_string()
-    } else {
-        "unknown".to_string()
+fn start_java_watching(state: &mut State) -> Result<(), Error> {
+    let (vm_ptr, context_ptr) = android_context()
+        .ok_or_else(|| Error::PlatformError("No Android context".into()))?;
+    
+    let jvm = unsafe { JavaVM::from_raw(vm_ptr as *mut jni::sys::JavaVM) }
+        .map_err(|e| Error::PlatformError(format!("Failed to get JavaVM: {:?}", e)))?;
+    
+    let support_object = {
+        let mut env = jvm.attach_current_thread()
+            .map_err(|e| Error::PlatformError(format!("Failed to attach thread: {:?}", e)))?;
+        
+        // Create the Java support object
+        let class_name = "com/transport_services/android/NetworkMonitorSupport";
+        let support_class = env.find_class(class_name)
+            .map_err(|e| Error::PlatformError(format!("Failed to find class: {:?}", e)))?;
+        
+        let constructor_sig = "(Landroid/content/Context;)V";
+        let context_obj = unsafe { JObject::from_raw(context_ptr as jni::sys::jobject) };
+        
+        let support_object = env.new_object(&support_class, constructor_sig, &[(&context_obj).into()])
+            .map_err(|e| Error::PlatformError(format!("Failed to create object: {:?}", e)))?;
+        
+        let global_ref = env.new_global_ref(support_object)
+            .map_err(|e| Error::PlatformError(format!("Failed to create global ref: {:?}", e)))?;
+        
+        // Start watching with callback pointer
+        let callback_ptr = transport_services_network_changed as *const () as jni::sys::jlong;
+        env.call_method(
+            &global_ref,
+            "startNetworkWatch",
+            "(J)V",
+            &[JValue::Long(callback_ptr)],
+        ).map_err(|e| Error::PlatformError(format!("Failed to start watch: {:?}", e)))?;
+        
+        global_ref
     };
-
-    // Check if metered
-    let is_expensive = !env
-        .call_method(
-            caps,
-            "hasCapability",
-            "(I)Z",
-            &[JValue::Int(11)], // NET_CAPABILITY_NOT_METERED
-        )
-        .map_err(|e| Error::PlatformError(format!("Failed to check metered: {:?}", e)))?
-        .z()
-        .unwrap_or(true);
-
-    Ok(Interface {
-        name: interface_type.clone(),
-        index: 0,
-        ips: Vec::new(),
-        status: Status::Up,
-        interface_type,
-        is_expensive,
-    })
-}
-
-fn create_network_callback(
-    env: &JNIEnv,
-    callback_holder: Arc<Mutex<Box<dyn Fn(ChangeEvent) + Send + 'static>>>,
-) -> Result<GlobalRef, Error> {
-    // In a real implementation, we would:
-    // 1. Define a custom NetworkCallback class
-    // 2. Override onAvailable, onLost, onCapabilitiesChanged methods
-    // 3. Call the Rust callback from Java callbacks
-
-    // For now, return a placeholder
-    Err(Error::NotSupported)
-}
-
-pub fn create_platform_impl() -> Result<Box<dyn PlatformMonitor + Send + Sync>, Error> {
-    // Get JVM instance
-    let jvm = match get_jvm() {
-        Some(jvm) => jvm,
-        None => return Err(Error::PlatformError("JVM not available".into())),
+    
+    let java_support = JavaSupport {
+        jvm,
+        support_object,
     };
+    state.java_support = Some(java_support);
+    Ok(())
+}
 
-    let mut env = jvm
-        .attach_current_thread()
+fn stop_java_watching(java_support: &JavaSupport) -> Result<(), Error> {
+    let mut env = java_support.jvm.attach_current_thread()
         .map_err(|e| Error::PlatformError(format!("Failed to attach thread: {:?}", e)))?;
+    
+    env.call_method(
+        &java_support.support_object,
+        "stopNetworkWatch",
+        "()V",
+        &[],
+    ).map_err(|e| Error::PlatformError(format!("Failed to stop watch: {:?}", e)))?;
+    
+    Ok(())
+}
 
-    // Get ConnectivityManager
-    let context = get_android_context(&mut env)?;
-    let cm_string = env
-        .new_string("connectivity")
-        .map_err(|e| Error::PlatformError(format!("Failed to create string: {:?}", e)))?;
+/// Called from Java when network interfaces change
+#[no_mangle]
+pub extern "C" fn transport_services_network_changed() {
+    let Some(state_ref) = STATE.get() else {
+        return;
+    };
+    
+    // Get new interface list
+    let new_list = match get_current_interfaces() {
+        Ok(list) => list,
+        Err(_) => return,
+    };
+    
+    let mut state = state_ref.lock().unwrap();
+    
+    // Calculate diff
+    let old_map: HashMap<String, &Interface> = state.current_interfaces
+        .iter()
+        .map(|i| (i.name.clone(), i))
+        .collect();
+    
+    let new_map: HashMap<String, &Interface> = new_list
+        .iter()
+        .map(|i| (i.name.clone(), i))
+        .collect();
+    
+    // Generate events
+    let mut events = Vec::new();
+    
+    // Check for removed interfaces
+    for (name, old_iface) in &old_map {
+        if !new_map.contains_key(name) {
+            events.push(ChangeEvent::Removed((*old_iface).clone()));
+        }
+    }
+    
+    // Check for added or modified interfaces
+    for (name, new_iface) in &new_map {
+        match old_map.get(name) {
+            None => events.push(ChangeEvent::Added((*new_iface).clone())),
+            Some(old_iface) => {
+                if !interfaces_equal(old_iface, new_iface) {
+                    events.push(ChangeEvent::Modified {
+                        old: (*old_iface).clone(),
+                        new: (*new_iface).clone(),
+                    });
+                }
+            }
+        }
+    }
+    
+    // Update state and notify watchers
+    state.current_interfaces = new_list;
+    for event in events {
+        for callback in state.watchers.values() {
+            callback(event.clone());
+        }
+    }
+}
 
-    let connectivity_manager = env
-        .call_method(
-            context,
-            "getSystemService",
-            "(Ljava/lang/String;)Ljava/lang/Object;",
-            &[JValue::Object(cm_string.into())],
-        )
-        .map_err(|e| Error::PlatformError(format!("Failed to get ConnectivityManager: {:?}", e)))?;
+fn get_current_interfaces() -> Result<Vec<Interface>, Error> {
+    let (vm_ptr, _) = android_context()
+        .ok_or_else(|| Error::PlatformError("No Android context".into()))?;
+    
+    let jvm = unsafe { JavaVM::from_raw(vm_ptr as *mut jni::sys::JavaVM) }
+        .map_err(|e| Error::PlatformError(format!("Failed to get JavaVM: {:?}", e)))?;
+    
+    let mut env = jvm.attach_current_thread()
+        .map_err(|e| Error::PlatformError(format!("Failed to attach thread: {:?}", e)))?;
+    
+    list_interfaces_jni(&mut env)
+}
 
-    let cm_global = env
-        .new_global_ref(connectivity_manager.l().unwrap())
+fn interfaces_equal(a: &Interface, b: &Interface) -> bool {
+    a.name == b.name &&
+    a.index == b.index &&
+    a.ips == b.ips &&
+    a.status == b.status &&
+    a.interface_type == b.interface_type &&
+    a.is_expensive == b.is_expensive
+}
+
+// Android context management
+struct AndroidContext {
+    vm: JavaVM,
+    context: GlobalRef,
+}
+
+unsafe impl Send for AndroidContext {}
+unsafe impl Sync for AndroidContext {}
+
+static ANDROID_CONTEXT: OnceLock<Mutex<Option<AndroidContext>>> = OnceLock::new();
+
+/// Sets the Android context for the transport services library.
+///
+/// # Safety
+///
+/// This function is unsafe because it accepts raw pointers from the JNI layer.
+/// The caller must ensure that:
+/// - `env` is a valid JNIEnv pointer from the current JNI call
+/// - `context` is a valid jobject representing an Android Context
+/// - The pointers remain valid for the duration of this function call
+#[no_mangle]
+pub unsafe extern "C" fn transport_services_set_android_context(
+    env: *mut jni::sys::JNIEnv,
+    context: jni::sys::jobject,
+) -> i32 {
+    match set_android_context_internal(env, context) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
+}
+
+unsafe fn set_android_context_internal(
+    env: *mut jni::sys::JNIEnv,
+    context: jni::sys::jobject,
+) -> Result<(), Error> {
+    let env = JNIEnv::from_raw(env)
+        .map_err(|e| Error::PlatformError(format!("Invalid JNIEnv: {:?}", e)))?;
+    let context_obj = JObject::from_raw(context);
+
+    let jvm = env.get_java_vm()
+        .map_err(|e| Error::PlatformError(format!("Failed to get JavaVM: {:?}", e)))?;
+    let global_context = env.new_global_ref(context_obj)
         .map_err(|e| Error::PlatformError(format!("Failed to create global ref: {:?}", e)))?;
 
-    Ok(Box::new(AndroidMonitor {
-        jvm,
-        connectivity_manager: Some(cm_global),
-        network_callback: None,
-        callback_holder: None,
-    }))
+    let android_ctx = AndroidContext {
+        vm: jvm,
+        context: global_context,
+    };
+
+    let context_storage = ANDROID_CONTEXT.get_or_init(|| Mutex::new(None));
+    *context_storage.lock().unwrap() = Some(android_ctx);
+
+    Ok(())
 }
 
-// Placeholder functions - in a real implementation these would be provided
-// by the Android application framework
-fn get_jvm() -> Option<Arc<JavaVM>> {
+fn android_context() -> Option<(*mut std::ffi::c_void, *mut std::ffi::c_void)> {
+    if let Some(context_storage) = ANDROID_CONTEXT.get() {
+        let ctx = context_storage.lock().unwrap();
+        if let Some(ref android_ctx) = *ctx {
+            let vm_ptr = android_ctx.vm.get_java_vm_pointer() as *mut std::ffi::c_void;
+            let context_ptr = android_ctx.context.as_obj().as_raw() as *mut std::ffi::c_void;
+            return Some((vm_ptr, context_ptr));
+        }
+    }
     None
 }
 
-fn get_android_context(env: &mut JNIEnv) -> Result<JObject, Error> {
-    Err(Error::NotSupported)
+pub fn create_platform_impl() -> Result<Box<dyn PlatformMonitor + Send + Sync>, Error> {
+    Ok(Box::new(AndroidMonitor {
+        _phantom: std::marker::PhantomData,
+    }))
 }

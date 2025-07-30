@@ -142,10 +142,18 @@ build_target() {
             fi
             # Set NDK environment variables that aws-lc-sys expects
             export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
-            export ANDROID_NDK="$ANDROID_NDK_HOME"
+            export ANDROID_NDK="$ANDROID_NDK_HOME"  # aws-lc-sys needs this
             export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang"
             export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
             export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang++"
+            # Point CMAKE to the actual executable as per issue #819
+            export CMAKE="/opt/homebrew/bin/cmake"
+            # Set CMake toolchain file for Android
+            export CMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+            export CMAKE_TOOLCHAIN_FILE_aarch64_linux_android="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+            # Set Android-specific CMake variables
+            export ANDROID_ABI="arm64-v8a"
+            export ANDROID_PLATFORM="android-30"
             ;;
         linux-*)
             # Linux cross-compilation
@@ -171,14 +179,9 @@ build_target() {
     # Build the static library in a subshell to isolate environment
     cd "$PROJECT_ROOT"
     if [[ "$platform" == android-* ]]; then
-        # Use cargo-ndk for Android builds
-        if ! command -v cargo-ndk &> /dev/null; then
-            echo "cargo-ndk not found - skipping Android build"
-            rm -rf "$variant_dir"
-            return
-        fi
+        # Direct Android build without cargo-ndk to avoid CMake issues
         if ! (
-            cargo ndk -t arm64-v8a build --release --features ffi
+            cargo build --release --target "$rust_target" --features ffi
         ); then
             echo "Failed to build for $platform - skipping"
             rm -rf "$variant_dir"
@@ -381,9 +384,45 @@ EOF
 EOF
 }
 
+# Parse command line arguments
+parse_args() {
+    SELECTED_PLATFORMS=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -p|--platform)
+                SELECTED_PLATFORMS+=("$2")
+                shift 2
+                ;;
+            -h|--help)
+                echo "Usage: $0 [-p|--platform PLATFORM] ..."
+                echo "Available platforms:"
+                for platform in "${PLATFORMS[@]}"; do
+                    echo "  $platform"
+                done
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Use -h or --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+    
+    # If no platforms specified, build all
+    if [ ${#SELECTED_PLATFORMS[@]} -eq 0 ]; then
+        SELECTED_PLATFORMS=("${PLATFORMS[@]}")
+    fi
+}
+
 # Main build process
 main() {
+    parse_args "$@"
+    
     echo "Building Transport Services artifact bundle..."
+    if [ ${#SELECTED_PLATFORMS[@]} -ne ${#PLATFORMS[@]} ]; then
+        echo "Building selected platforms: ${SELECTED_PLATFORMS[*]}"
+    fi
     
     init_build
     install_rust_targets
@@ -392,10 +431,13 @@ main() {
     # Track successful builds
     local successful_builds=0
     
-    # Build all targets
-    for i in "${!PLATFORMS[@]}"; do
-        local platform="${PLATFORMS[$i]}"
+    # Build selected targets
+    for platform in "${SELECTED_PLATFORMS[@]}"; do
         local rust_target="$(get_rust_target "$platform")"
+        if [ -z "$rust_target" ]; then
+            echo "Error: Unknown platform '$platform'"
+            continue
+        fi
         build_target "$platform" "$rust_target"
         if [ -d "$ARTIFACT_BUNDLE_DIR/$ARTIFACT_NAME/$platform" ]; then
             ((successful_builds++))
@@ -408,7 +450,7 @@ main() {
     fi
     
     echo ""
-    echo "Successfully built $successful_builds out of ${#PLATFORMS[@]} targets"
+    echo "Successfully built $successful_builds out of ${#SELECTED_PLATFORMS[@]} selected targets"
     
     create_manifest
     create_bundle_index

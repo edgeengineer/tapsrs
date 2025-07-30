@@ -41,7 +41,7 @@ pub enum Status {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ChangeEvent {
     Added(Interface),
     Removed(Interface),
