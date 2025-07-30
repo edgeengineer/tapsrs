@@ -13,13 +13,13 @@ import TransportServicesFFI
 
 public enum TransportServices {
     /// Initialize the Transport Services runtime
-    public static func initialize() throws {
-        try Runtime.shared.initialize()
+    public static func initialize() async throws {
+        try await Runtime.shared.initialize()
     }
     
     /// Cleanup the Transport Services runtime
-    public static func cleanup() {
-        Runtime.shared.cleanup()
+    public static func cleanup() async {
+        await Runtime.shared.cleanup()
     }
     
     /// Get the version string of the Transport Services library

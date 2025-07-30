@@ -9,7 +9,7 @@ import TransportServicesFFI
 
 /// Preconnection represents a set of parameters for establishing connections
 public struct Preconnection: Sendable {
-    private let handle: OpaquePointer
+    private nonisolated(unsafe) let handle: UnsafeMutablePointer<transport_services_handle_t>
     
     /// Local endpoints
     public let localEndpoints: [LocalEndpoint]
@@ -29,9 +29,9 @@ public struct Preconnection: Sendable {
         remoteEndpoints: [RemoteEndpoint] = [],
         transportProperties: TransportProperties = TransportProperties(),
         securityParameters: SecurityParameters = SecurityParameters()
-    ) throws {
+    ) async throws {
         // Ensure runtime is initialized
-        try Runtime.shared.initialize()
+        try await Runtime.shared.initialize()
         
         self.localEndpoints = localEndpoints
         self.remoteEndpoints = remoteEndpoints
@@ -49,27 +49,43 @@ public struct Preconnection: Sendable {
         guard let propertiesHandle = transportProperties.toFFIHandle() else {
             throw TransportServicesError.invalidParameter
         }
-        defer { transport_services_transport_properties_free(propertiesHandle) }
+        defer { transport_services_free_transport_properties(propertiesHandle) }
         
         guard let securityHandle = securityParameters.toFFIHandle() else {
             throw TransportServicesError.invalidParameter
         }
-        defer { transport_services_security_parameters_free(securityHandle) }
+        defer { transport_services_free_security_parameters(securityHandle) }
         
         // Create preconnection
-        guard let handle = transport_services_preconnection_new(
-            localFFI,
-            localCount,
-            remoteFFI,
-            remoteCount,
-            propertiesHandle,
-            securityHandle
-        ) else {
+        guard let handle = transport_services_preconnection_new() else {
             let error = TransportServices.getLastError() ?? "Failed to create preconnection"
             throw TransportServicesError.connectionFailed(message: error)
         }
         
         self.handle = handle
+        
+        // Add endpoints after creation
+        for endpoint in localEndpoints {
+            var endpointFFI = endpoint.toFFI()
+            let result = transport_services_preconnection_add_local_endpoint(handle, &endpointFFI)
+            if result != TRANSPORT_SERVICES_ERROR_T_SUCCESS {
+                throw TransportServicesError.invalidParameter
+            }
+        }
+        
+        for endpoint in remoteEndpoints {
+            var endpointFFI = endpoint.toFFI()
+            let result = transport_services_preconnection_add_remote_endpoint(handle, &endpointFFI)
+            if result != TRANSPORT_SERVICES_ERROR_T_SUCCESS {
+                throw TransportServicesError.invalidParameter
+            }
+        }
+        
+        // TODO: Set properties - need to convert TransportProperties to FFI struct
+        // let propResult = transport_services_preconnection_set_transport_properties(handle, propertiesHandle)
+        // if propResult != TRANSPORT_SERVICES_ERROR_T_SUCCESS {
+        //     throw TransportServicesError.invalidParameter
+        // }
     }
     
     /// Initiate a connection
@@ -78,34 +94,39 @@ public struct Preconnection: Sendable {
             let context = PreconnectionContext(continuation: continuation)
             let contextPtr = Unmanaged.passRetained(context)
             
-            transport_services_preconnection_initiate(
+            let result = transport_services_preconnection_initiate(
                 handle,
-                { connectionHandle, error, userData in
+                { connectionHandle, userData in
                     guard let userData = userData else { return }
                     let context = Unmanaged<PreconnectionContext>.fromOpaque(userData).takeRetainedValue()
                     
                     if let connectionHandle = connectionHandle {
-                        let connection = Connection(handle: connectionHandle)
+                        let wrapper = HandleWrapper(connectionHandle)
+                        let connection = Connection(handle: wrapper.rawHandle)
                         context.continuation.resume(returning: connection)
-                    } else {
-                        let errorMessage = TransportServices.getLastError() ?? "Connection initiation failed"
-                        context.continuation.resume(throwing: TransportServicesError.connectionFailed(message: errorMessage))
                     }
+                },
+                { error, errorMessage, userData in
+                    guard let userData = userData else { return }
+                    let context = Unmanaged<PreconnectionContext>.fromOpaque(userData).takeRetainedValue()
+                    let message = errorMessage.map { String(cString: $0) } ?? "Connection initiation failed"
+                    context.continuation.resume(throwing: TransportServicesError.connectionFailed(message: message))
                 },
                 contextPtr.toOpaque()
             )
+            
+            if result != TRANSPORT_SERVICES_ERROR_T_SUCCESS {
+                contextPtr.release()
+                let errorMessage = TransportServices.getLastError() ?? "Failed to initiate connection"
+                continuation.resume(throwing: TransportServicesError.connectionFailed(message: errorMessage))
+            }
         }
     }
     
     /// Listen for incoming connections
     public func listen() async throws -> Listener {
-        let listenerHandle = transport_services_preconnection_listen(handle)
-        guard let handle = listenerHandle else {
-            let error = TransportServices.getLastError() ?? "Failed to create listener"
-            throw TransportServicesError.listenerFailed(message: error)
-        }
-        
-        return Listener(handle: handle)
+        // TODO: FFI function transport_services_preconnection_listen is not yet exposed
+        throw TransportServicesError.notImplemented(feature: "transport_services_preconnection_listen")
     }
     
     /// Start a rendezvous (simultaneous connect/listen)
@@ -191,8 +212,8 @@ public struct PreconnectionBuilder: Sendable {
     }
     
     /// Build the preconnection
-    public func build() throws -> Preconnection {
-        try Preconnection(
+    public func build() async throws -> Preconnection {
+        try await Preconnection(
             localEndpoints: localEndpoints,
             remoteEndpoints: remoteEndpoints,
             transportProperties: transportProperties,

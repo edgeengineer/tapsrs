@@ -12,7 +12,7 @@ import TransportServicesFFI
 /// Common protocol for all endpoint types
 public protocol Endpoint: Sendable {
     /// Convert to FFI representation
-    func toFFI() -> TransportServicesEndpoint
+    func toFFI() -> transport_services_endpoint_t
 }
 
 // MARK: - Local Endpoint
@@ -45,8 +45,8 @@ public struct LocalEndpoint: Endpoint, Hashable {
         LocalEndpoint(ipAddress: "127.0.0.1", port: port)
     }
     
-    public func toFFI() -> TransportServicesEndpoint {
-        TransportServicesEndpoint(
+    public func toFFI() -> transport_services_endpoint_t {
+        transport_services_endpoint_t(
             hostname: ipAddress?.withCString { strdup($0) },
             port: port,
             service: nil,
@@ -88,7 +88,7 @@ public struct RemoteEndpoint: Endpoint, Hashable {
         self.interface = interface
     }
     
-    public func toFFI() -> TransportServicesEndpoint {
+    public func toFFI() -> transport_services_endpoint_t {
         let service: UnsafeMutablePointer<CChar>?
         let port: UInt16
         
@@ -101,7 +101,7 @@ public struct RemoteEndpoint: Endpoint, Hashable {
             service = s.withCString { strdup($0) }
         }
         
-        return TransportServicesEndpoint(
+        return transport_services_endpoint_t(
             hostname: hostname.withCString { strdup($0) },
             port: port,
             service: service,
@@ -114,10 +114,10 @@ public struct RemoteEndpoint: Endpoint, Hashable {
 
 extension Array where Element == any Endpoint {
     /// Convert array of endpoints to FFI representation
-    func toFFIArray() -> (UnsafeMutablePointer<TransportServicesEndpoint>?, Int) {
+    func toFFIArray() -> (UnsafeMutablePointer<transport_services_endpoint_t>?, Int) {
         guard !isEmpty else { return (nil, 0) }
         
-        let buffer = UnsafeMutablePointer<TransportServicesEndpoint>.allocate(capacity: count)
+        let buffer = UnsafeMutablePointer<transport_services_endpoint_t>.allocate(capacity: count)
         for (index, endpoint) in enumerated() {
             buffer.advanced(by: index).pointee = endpoint.toFFI()
         }
@@ -127,7 +127,7 @@ extension Array where Element == any Endpoint {
 }
 
 /// Free FFI endpoint array
-func freeFFIEndpoints(_ endpoints: UnsafeMutablePointer<TransportServicesEndpoint>?, count: Int) {
+func freeFFIEndpoints(_ endpoints: UnsafeMutablePointer<transport_services_endpoint_t>?, count: Int) {
     guard let endpoints = endpoints, count > 0 else { return }
     
     for i in 0..<count {

@@ -14,14 +14,13 @@ import TransportServicesFFI
 /// This class provides an async/await interface for monitoring network interface changes
 /// and is fully thread-safe with Sendable conformance.
 
-public final class PathMonitor: Sendable {
-    private let handle: OpaquePointer
-    private let lock = NSLock()
+public actor PathMonitor {
+    private nonisolated(unsafe) let handle: UnsafeMutablePointer<transport_services_handle_t>
     
     /// Create a new network path monitor
     public init() throws {
         guard let handle = transport_services_path_monitor_create() else {
-            if let errorMessage = Self.getLastError() {
+            if let errorMessage = PathMonitor.getLastError() {
                 throw PathMonitorError.creationFailed(message: errorMessage)
             } else {
                 throw PathMonitorError.creationFailed(message: "Unknown error")
@@ -36,40 +35,34 @@ public final class PathMonitor: Sendable {
     
     /// List all current network interfaces
     public func interfaces() async throws -> [NetworkInterface] {
-        try await withCheckedThrowingContinuation { continuation in
-            lock.lock()
-            defer { lock.unlock() }
-            
-            var interfacePointers: UnsafeMutablePointer<UnsafeMutablePointer<TransportServicesInterface>?>?
-            var count: Int = 0
-            
-            let result = transport_services_path_monitor_list_interfaces(
-                handle,
-                &interfacePointers,
-                &count
-            )
-            
-            guard result == 0, let interfaces = interfacePointers else {
-                let error = Self.getLastError() ?? "Failed to list interfaces"
-                continuation.resume(throwing: PathMonitorError.listInterfacesFailed(message: error))
-                return
-            }
-            
-            defer {
-                transport_services_path_monitor_free_interfaces(interfaces, count)
-            }
-            
-            var swiftInterfaces: [NetworkInterface] = []
-            
-            for i in 0..<count {
-                if let interfacePtr = interfaces.advanced(by: i).pointee {
-                    let interface = interfacePtr.pointee
-                    swiftInterfaces.append(NetworkInterface(from: interface))
-                }
-            }
-            
-            continuation.resume(returning: swiftInterfaces)
+        var interfacePointers: UnsafeMutablePointer<transport_services_TransportServicesInterface>?
+        var count: UInt = 0
+        
+        let result = transport_services_path_monitor_list_interfaces(
+            handle,
+            &interfacePointers,
+            &count
+        )
+        
+        guard result == 0, let interfaces = interfacePointers else {
+            let error = PathMonitor.getLastError() ?? "Failed to list interfaces"
+            throw PathMonitorError.listInterfacesFailed(message: error)
         }
+        
+        defer {
+            // Always free the interfaces
+            var mutableInterfaces: UnsafeMutablePointer<transport_services_TransportServicesInterface>? = interfaces
+            transport_services_path_monitor_free_interfaces(&mutableInterfaces, count)
+        }
+        
+        var swiftInterfaces: [NetworkInterface] = []
+        
+        for i in 0..<Int(count) {
+            let interface = interfaces.advanced(by: i).pointee
+            swiftInterfaces.append(NetworkInterface(from: interface))
+        }
+        
+        return swiftInterfaces
     }
     
     /// Start monitoring network changes
@@ -81,7 +74,7 @@ public final class PathMonitor: Sendable {
     
     // MARK: - Private Helpers
     
-    fileprivate func startWatching(callback: @escaping (NetworkChangeEvent) -> Void) -> OpaquePointer? {
+    func startWatching(callback: @escaping (NetworkChangeEvent) -> Void) -> OptionalHandleWrapper {
         let context = Unmanaged.passRetained(NetworkChangeContext(callback: callback))
         
         let watcherHandle = transport_services_path_monitor_start_watching(
@@ -103,7 +96,7 @@ public final class PathMonitor: Sendable {
             context.release()
         }
         
-        return watcherHandle
+        return OptionalHandleWrapper(watcherHandle)
     }
     
     private static func getLastError() -> String? {
@@ -131,15 +124,16 @@ public struct NetworkInterface: Sendable, Identifiable {
         case unknown
     }
     
-    init(from ffi: TransportServicesInterface) {
-        self.id = "\(ffi.name ?? "unknown")_\(ffi.index)"
-        self.name = String(cString: ffi.name ?? "unknown")
+    init(from ffi: transport_services_TransportServicesInterface) {
+        let nameStr = ffi.name.map { String(cString: $0) } ?? "unknown"
+        self.id = "\(nameStr)_\(ffi.index)"
+        self.name = ffi.name.map { String(cString: $0) } ?? "unknown"
         self.index = ffi.index
         
         // Convert IP addresses
         var addresses: [String] = []
         if let ips = ffi.ips, ffi.ip_count > 0 {
-            for i in 0..<ffi.ip_count {
+            for i in 0..<Int(ffi.ip_count) {
                 if let ipCString = ips.advanced(by: i).pointee {
                     addresses.append(String(cString: ipCString))
                 }
@@ -149,15 +143,15 @@ public struct NetworkInterface: Sendable, Identifiable {
         
         // Convert status
         switch ffi.status {
-        case TRANSPORT_SERVICES_INTERFACE_STATUS_UP:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_INTERFACE_STATUS_UP:
             self.status = .up
-        case TRANSPORT_SERVICES_INTERFACE_STATUS_DOWN:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_INTERFACE_STATUS_DOWN:
             self.status = .down
         default:
             self.status = .unknown
         }
         
-        self.interfaceType = String(cString: ffi.interface_type ?? "unknown")
+        self.interfaceType = ffi.interface_type.map { String(cString: $0) } ?? "unknown"
         self.isExpensive = ffi.is_expensive
     }
 }
@@ -172,9 +166,9 @@ public enum NetworkChangeEvent: Sendable {
     case modified(old: NetworkInterface, new: NetworkInterface)
     case pathChanged(description: String)
     
-    init(from ffi: TransportServicesChangeEvent) {
+    init(from ffi: transport_services_TransportServicesChangeEvent) {
         switch ffi.event_type {
-        case TRANSPORT_SERVICES_CHANGE_EVENT_ADDED:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_CHANGE_EVENT_TYPE_ADDED:
             if let interfacePtr = ffi.interface {
                 let interface = NetworkInterface(from: interfacePtr.pointee)
                 self = .added(interface)
@@ -182,7 +176,7 @@ public enum NetworkChangeEvent: Sendable {
                 self = .pathChanged(description: "Interface added")
             }
             
-        case TRANSPORT_SERVICES_CHANGE_EVENT_REMOVED:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_CHANGE_EVENT_TYPE_REMOVED:
             if let interfacePtr = ffi.interface {
                 let interface = NetworkInterface(from: interfacePtr.pointee)
                 self = .removed(interface)
@@ -190,7 +184,7 @@ public enum NetworkChangeEvent: Sendable {
                 self = .pathChanged(description: "Interface removed")
             }
             
-        case TRANSPORT_SERVICES_CHANGE_EVENT_MODIFIED:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_CHANGE_EVENT_TYPE_MODIFIED:
             if let oldPtr = ffi.old_interface,
                let newPtr = ffi.interface {
                 let oldInterface = NetworkInterface(from: oldPtr.pointee)
@@ -200,7 +194,7 @@ public enum NetworkChangeEvent: Sendable {
                 self = .pathChanged(description: "Interface modified")
             }
             
-        case TRANSPORT_SERVICES_CHANGE_EVENT_PATH_CHANGED:
+        case TRANSPORT_SERVICES_TRANSPORT_SERVICES_CHANGE_EVENT_TYPE_PATH_CHANGED:
             let description = ffi.description.map { String(cString: $0) } ?? "Path changed"
             self = .pathChanged(description: description)
             
@@ -230,54 +224,39 @@ public struct NetworkChangeSequence: AsyncSequence, Sendable {
 
 /// AsyncIterator for network change events
 
-public actor NetworkChangeIterator: AsyncIteratorProtocol {
+public struct NetworkChangeIterator: AsyncIteratorProtocol {
     public typealias Element = NetworkChangeEvent
     
-    private let monitor: PathMonitor
-    private var watcherHandle: OpaquePointer?
-    private var continuation: AsyncStream<NetworkChangeEvent>.Continuation?
-    private var stream: AsyncStream<NetworkChangeEvent>?
-    private var iterator: AsyncStream<NetworkChangeEvent>.Iterator?
+    private let stream: AsyncStream<NetworkChangeEvent>
+    private var iterator: AsyncStream<NetworkChangeEvent>.Iterator
     
     init(monitor: PathMonitor) {
-        self.monitor = monitor
-        setupStream()
-    }
-    
-    deinit {
-        Task { [watcherHandle] in
-            if let handle = watcherHandle {
-                transport_services_path_monitor_stop_watching(handle)
+        let (stream, continuation) = AsyncStream<NetworkChangeEvent>.makeStream()
+        self.stream = stream
+        self.iterator = stream.makeAsyncIterator()
+        
+        // Start watching in background
+        Task {
+            let handleWrapper = await monitor.startWatching { event in
+                continuation.yield(event)
+            }
+            
+            // If watching failed, finish the stream
+            if handleWrapper.rawHandle == nil {
+                continuation.finish()
+            }
+            
+            // Ensure cleanup when stream ends
+            continuation.onTermination = { _ in
+                if let handle = handleWrapper.rawHandle {
+                    transport_services_path_monitor_stop_watching(handle)
+                }
             }
         }
     }
     
-    private func setupStream() {
-        let (stream, continuation) = AsyncStream<NetworkChangeEvent>.makeStream()
-        self.stream = stream
-        self.continuation = continuation
-        self.iterator = stream.makeAsyncIterator()
-        
-        // Start watching
-        Task {
-            await startWatching()
-        }
-    }
-    
-    private func startWatching() {
-        guard let continuation = continuation else { return }
-        
-        watcherHandle = monitor.startWatching { event in
-            continuation.yield(event)
-        }
-        
-        if watcherHandle == nil {
-            continuation.finish()
-        }
-    }
-    
-    public func next() async -> NetworkChangeEvent? {
-        await iterator?.next()
+    public mutating func next() async -> NetworkChangeEvent? {
+        await iterator.next()
     }
 }
 

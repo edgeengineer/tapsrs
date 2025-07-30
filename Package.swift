@@ -1,10 +1,6 @@
-// swift-tools-version:6.1
+// swift-tools-version:6.2
 import PackageDescription
-#if canImport(FoundationEssentials)
-import FoundationEssentials // Needed for binary target support
-#else
 import Foundation // Fallback for older Swift versions
-#endif
 
 // --- Logic to switch between local and remote artifact ---
 

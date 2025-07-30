@@ -20,23 +20,20 @@ public enum ListenerEvent: Sendable {
 
 /// Listener for accepting incoming connections
 public actor Listener {
-    private let handle: OpaquePointer
+    private nonisolated(unsafe) let handle: UnsafeMutablePointer<transport_services_handle_t>
     private var eventContinuation: AsyncStream<ListenerEvent>.Continuation?
     private var acceptContinuations: [CheckedContinuation<Connection, Error>] = []
     private var isStopped = false
     
     /// Maximum number of pending connections
-    public var connectionLimit: Int = 100 {
-        didSet {
-            guard !isStopped else { return }
-            transport_services_listener_set_new_connection_limit(handle, Int32(connectionLimit))
-        }
-    }
+    public var connectionLimit: Int = 100
     
     /// Create a listener from an FFI handle
-    init(handle: OpaquePointer) {
+    init(handle: UnsafeMutablePointer<transport_services_handle_t>) {
         self.handle = handle
-        setupEventHandling()
+        Task {
+            await setupEventHandling()
+        }
     }
     
     deinit {
@@ -54,19 +51,8 @@ public actor Listener {
             throw TransportServicesError.listenerFailed(message: "Listener is stopped")
         }
         
-        var address: UnsafeMutablePointer<CChar>?
-        var port: UInt16 = 0
-        
-        let result = transport_services_listener_get_local_endpoint(handle, &address, &port)
-        
-        guard result == 0, let addressPtr = address else {
-            throw TransportServicesError.listenerFailed(message: "Failed to get local address")
-        }
-        
-        defer { transport_services_free_string(addressPtr) }
-        
-        let addressString = String(cString: addressPtr)
-        return (addressString, port)
+        // TODO: FFI function transport_services_listener_get_local_endpoint is not yet exposed
+        throw TransportServicesError.notImplemented(feature: "transport_services_listener_get_local_endpoint")
     }
     
     /// Accept a new connection
@@ -131,18 +117,22 @@ public actor Listener {
     
     private func setupEventHandling() {
         // Set up connection received callback
-        let context = Unmanaged.passRetained(ListenerContext { [weak self] connectionHandle in
+        let context = Unmanaged.passRetained(ListenerContext { connectionHandle in
+            let wrapper = HandleWrapper(connectionHandle)
             Task { [weak self] in
-                await self?.handleConnectionReceived(connectionHandle)
+                await self?.handleConnectionReceived(wrapper.rawHandle)
             }
         })
         
-        transport_services_listener_set_new_connection_handler(
+        transport_services_listener_set_callbacks(
             handle,
             { connectionHandle, userData in
                 guard let userData = userData, let connectionHandle = connectionHandle else { return }
                 let context = Unmanaged<ListenerContext>.fromOpaque(userData).takeUnretainedValue()
                 context.callback(connectionHandle)
+            },
+            { error, errorMessage, userData in
+                // TODO: Handle errors if needed
             },
             context.toOpaque()
         )
@@ -155,8 +145,9 @@ public actor Listener {
         // No explicit accept call needed - it's event-driven
     }
     
-    private func handleConnectionReceived(_ connectionHandle: OpaquePointer) {
-        let connection = Connection(handle: connectionHandle)
+    private func handleConnectionReceived(_ connectionHandle: UnsafeMutablePointer<transport_services_handle_t>) {
+        let wrapper = HandleWrapper(connectionHandle)
+        let connection = Connection(handle: wrapper.rawHandle)
         
         // Fulfill waiting accept if any
         if let continuation = acceptContinuations.first {
@@ -210,9 +201,9 @@ public struct ListenerConnectionIterator: AsyncIteratorProtocol {
 
 /// Context for listener callbacks
 private final class ListenerContext {
-    let callback: (OpaquePointer) -> Void
+    let callback: (UnsafeMutablePointer<transport_services_handle_t>) -> Void
     
-    init(callback: @escaping (OpaquePointer) -> Void) {
+    init(callback: @escaping (UnsafeMutablePointer<transport_services_handle_t>) -> Void) {
         self.callback = callback
     }
 }
@@ -220,38 +211,6 @@ private final class ListenerContext {
 // MARK: - Convenience Extensions
 
 public extension Listener {
-    /// Accept connections with a handler closure
-    func acceptLoop(handler: @escaping (Connection) async throws -> Void) async {
-        for await connection in connections() {
-            // Handle each connection concurrently
-            Task {
-                do {
-                    try await handler(connection)
-                } catch {
-                    // Error is silently ignored to prevent crashes
-                    // Users should handle errors in their handler if needed
-                }
-            }
-        }
-    }
-    
-    /// Accept connections with a handler closure and error handler
-    func acceptLoop(
-        handler: @escaping (Connection) async throws -> Void,
-        errorHandler: @escaping (Error) -> Void
-    ) async {
-        for await connection in connections() {
-            // Handle each connection concurrently
-            Task {
-                do {
-                    try await handler(connection)
-                } catch {
-                    errorHandler(error)
-                }
-            }
-        }
-    }
-    
     /// Accept a limited number of connections
     func accept(count: Int) async throws -> [Connection] {
         var connections: [Connection] = []

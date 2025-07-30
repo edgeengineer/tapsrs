@@ -71,6 +71,25 @@ get_rust_target() {
     echo ""
 }
 
+# Function to get Swift triple from Rust target
+get_swift_triple() {
+    local rust_target=$1
+    case "$rust_target" in
+        "aarch64-apple-darwin")
+            echo "arm64-apple-macosx"
+            ;;
+        "aarch64-apple-ios")
+            echo "arm64-apple-ios"
+            ;;
+        "aarch64-apple-ios-sim")
+            echo "arm64-apple-ios-simulator"
+            ;;
+        *)
+            echo "$rust_target"
+            ;;
+    esac
+}
+
 # Initialize build environment
 init_build() {
     echo "Initializing build environment..."
@@ -103,7 +122,7 @@ generate_headers() {
     # Generate module map
     cat > "$BUILD_DIR/module.modulemap" << EOF
 module TransportServicesFFI {
-    header "transport_services.h"
+    umbrella header "TransportServicesFFI.h"
     export *
 }
 EOF
@@ -214,6 +233,22 @@ build_target() {
     # Copy headers
     cp "$BUILD_DIR/transport_services.h" "$variant_dir/include/"
     cp "$BUILD_DIR/module.modulemap" "$variant_dir/include/"
+    
+    # Create umbrella header that defines FFI_FEATURE
+    cat > "$variant_dir/include/TransportServicesFFI.h" << 'EOF'
+/* Umbrella header for TransportServicesFFI */
+
+#ifndef TRANSPORT_SERVICES_FFI_H
+#define TRANSPORT_SERVICES_FFI_H
+
+/* Define FFI_FEATURE to enable FFI functions */
+#define FFI_FEATURE 1
+
+/* Include the generated header */
+#include "transport_services.h"
+
+#endif /* TRANSPORT_SERVICES_FFI_H */
+EOF
 }
 
 # Create artifact bundle manifest
@@ -247,10 +282,12 @@ create_manifest() {
             variants_json+=","
         fi
         
+        local swift_triple="$(get_swift_triple "$rust_target")"
+        
         variants_json+="
                 {
                     \"path\": \"$lib_path\",
-                    \"supportedTriples\": [\"$rust_target\"],
+                    \"supportedTriples\": [\"$swift_triple\"],
                     \"staticLibraryMetadata\": {
                         \"headerPaths\": [\"$ARTIFACT_NAME/$platform/include\"],
                         \"moduleMapPath\": \"$ARTIFACT_NAME/$platform/include/module.modulemap\"
@@ -319,10 +356,12 @@ create_bundle_index() {
                     group_variants_json+=","
                 fi
                 
+                local swift_triple="$(get_swift_triple "$rust_target")"
+                
                 group_variants_json+="
                 {
                     \"path\": \"$lib_path\",
-                    \"supportedTriples\": [\"$rust_target\"],
+                    \"supportedTriples\": [\"$swift_triple\"],
                     \"staticLibraryMetadata\": {
                         \"headerPaths\": [\"$ARTIFACT_NAME/$platform/include\"],
                         \"moduleMapPath\": \"$ARTIFACT_NAME/$platform/include/module.modulemap\"

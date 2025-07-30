@@ -18,18 +18,16 @@ public enum ConnectionState: Sendable {
     case failed(Error)
     
     /// Create from FFI state
-    init(ffi: TransportServicesConnectionState) {
+    init(ffi: transport_services_connection_state_t) {
         switch ffi {
-        case TRANSPORT_SERVICES_CONNECTION_STATE_ESTABLISHING:
+        case TRANSPORT_SERVICES_CONNECTION_STATE_T_ESTABLISHING:
             self = .establishing
-        case TRANSPORT_SERVICES_CONNECTION_STATE_READY:
+        case TRANSPORT_SERVICES_CONNECTION_STATE_T_ESTABLISHED:
             self = .ready
-        case TRANSPORT_SERVICES_CONNECTION_STATE_CLOSING:
+        case TRANSPORT_SERVICES_CONNECTION_STATE_T_CLOSING:
             self = .closing
-        case TRANSPORT_SERVICES_CONNECTION_STATE_CLOSED:
+        case TRANSPORT_SERVICES_CONNECTION_STATE_T_CLOSED:
             self = .closed
-        case TRANSPORT_SERVICES_CONNECTION_STATE_FAILED:
-            self = .failed(TransportServicesError.connectionFailed(message: "Connection failed"))
         default:
             self = .closed
         }
@@ -85,7 +83,7 @@ public struct MessageContext: Sendable {
 
 /// Thread-safe connection manager using actor
 public actor Connection {
-    private let handle: OpaquePointer
+    private let handleWrapper: HandleWrapper
     private var eventContinuation: AsyncStream<ConnectionEvent>.Continuation?
     private var isClosed = false
     
@@ -93,16 +91,18 @@ public actor Connection {
     public private(set) var state: ConnectionState = .establishing
     
     /// Create a connection from an FFI handle
-    init(handle: OpaquePointer) {
-        self.handle = handle
-        setupEventHandling()
+    init(handle: UnsafeMutablePointer<transport_services_handle_t>) {
+        self.handleWrapper = HandleWrapper(handle)
+        Task {
+            await setupEventHandling()
+        }
     }
     
     deinit {
         if !isClosed {
-            transport_services_connection_close(handle)
+            transport_services_connection_close(handleWrapper.rawHandle)
         }
-        transport_services_connection_free(handle)
+        transport_services_connection_free(handleWrapper.rawHandle)
     }
     
     // MARK: - Public Methods
@@ -111,7 +111,7 @@ public actor Connection {
     public func getState() -> ConnectionState {
         guard !isClosed else { return .closed }
         
-        let ffiState = transport_services_connection_get_state(handle)
+        let ffiState = transport_services_connection_get_state(handleWrapper.rawHandle)
         let newState = ConnectionState(ffi: ffiState)
         
         // Update our cached state
@@ -131,9 +131,9 @@ public actor Connection {
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             message.data.withUnsafeBytes { dataBufferPointer in
-                var ffiMessage = TransportServicesMessage()
-                ffiMessage.data = dataBufferPointer.baseAddress
-                ffiMessage.length = message.data.count
+                var ffiMessage = transport_services_message_t()
+                ffiMessage.data = dataBufferPointer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                ffiMessage.length = UInt(message.data.count)
                 
                 if let context = message.context {
                     if let lifetime = context.messageLifetime {
@@ -142,20 +142,20 @@ public actor Connection {
                     if let priority = context.priority {
                         ffiMessage.priority = Int32(priority)
                     }
-                    ffiMessage.is_end_of_message = context.isEndOfMessage
+                    ffiMessage.final_message = context.isEndOfMessage
                 } else {
-                    ffiMessage.is_end_of_message = true
+                    ffiMessage.final_message = true
                 }
                 
                 let sendContext = Unmanaged.passRetained(SendContinuationContext(continuation: continuation))
                 
                 let result = transport_services_connection_send(
-                    handle,
+                    handleWrapper.rawHandle,
                     &ffiMessage,
                     { error, _, userData in // message pointer is ignored here
                         guard let userData = userData else { return }
                         let context = Unmanaged<SendContinuationContext>.fromOpaque(userData).takeRetainedValue()
-                        if error == TRANSPORT_SERVICES_ERROR_NONE {
+                        if error == TRANSPORT_SERVICES_ERROR_T_SUCCESS {
                             context.continuation.resume()
                         } else {
                             let errorMessage = TransportServices.getLastError() ?? "Send failed with code \(error)"
@@ -165,7 +165,7 @@ public actor Connection {
                     sendContext.toOpaque()
                 )
                 
-                if result != TRANSPORT_SERVICES_ERROR_NONE {
+                if result != TRANSPORT_SERVICES_ERROR_T_SUCCESS {
                     sendContext.release()
                     let errorMessage = TransportServices.getLastError() ?? "Send failed"
                     continuation.resume(throwing: TransportServicesError.sendFailed(message: errorMessage))
@@ -197,23 +197,26 @@ public actor Connection {
             let receiveContext = Unmanaged.passRetained(ReceiveContinuationContext(continuation: continuation))
             
             transport_services_connection_receive(
-                handle,
-                { messagePtr, error, userData in
+                handleWrapper.rawHandle,
+                { messagePtr, context, userData in
                     guard let userData = userData else { return }
-                    let context = Unmanaged<ReceiveContinuationContext>.fromOpaque(userData).takeRetainedValue()
+                    let receiveContext = Unmanaged<ReceiveContinuationContext>.fromOpaque(userData).takeRetainedValue()
                     
                     if let messagePtr = messagePtr {
                         let message = messagePtr.pointee
                         if let dataPtr = message.data, message.length > 0 {
-                            let data = Data(bytes: dataPtr, count: message.length)
-                            context.continuation.resume(returning: data)
+                            let data = Data(bytes: dataPtr, count: Int(message.length))
+                            receiveContext.continuation.resume(returning: data)
                         } else {
-                            context.continuation.resume(throwing: TransportServicesError.receiveFailed(message: "Empty message received"))
+                            receiveContext.continuation.resume(throwing: TransportServicesError.receiveFailed(message: "Empty message received"))
                         }
-                    } else {
-                        let errorMessage = TransportServices.getLastError() ?? "Receive failed with code \(error)"
-                        context.continuation.resume(throwing: TransportServicesError.receiveFailed(message: errorMessage))
                     }
+                },
+                { error, errorMessage, userData in
+                    guard let userData = userData else { return }
+                    let receiveContext = Unmanaged<ReceiveContinuationContext>.fromOpaque(userData).takeRetainedValue()
+                    let message = errorMessage.map { String(cString: $0) } ?? "Receive failed"
+                    receiveContext.continuation.resume(throwing: TransportServicesError.receiveFailed(message: message))
                 },
                 receiveContext.toOpaque()
             )
@@ -228,7 +231,7 @@ public actor Connection {
         state = .closing
         
         // Close the connection
-        transport_services_connection_close(handle)
+        transport_services_connection_close(handleWrapper.rawHandle)
         state = .closed
         
         // Notify event stream
