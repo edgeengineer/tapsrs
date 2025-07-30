@@ -44,6 +44,11 @@ This library is a progressive implementation of the TAPS specification. Key impl
 - **Connection Management (RFC Section 8 & 10)**:
     - Settable and read-only connection properties.
     - Graceful (`Close`) and immediate (`Abort`) termination.
+- **Path Monitoring**: Platform-specific network interface monitoring to support future multipath capabilities.
+
+### Work in Progress
+
+- **Multipath Support**: Currently implementing multipath functionality as specified in RFC 9622/9623. The foundation has been laid with the path_monitor module, but full multipath transport (MPTCP, QUIC multipath) and connection racing are still under development. See [Issue #12](https://github.com/edgeengineer/tapsrs/issues/12) for details.
 
 For a detailed implementation status, please see the [Implementation Checklist](checklist.md).
 
