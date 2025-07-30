@@ -138,13 +138,16 @@ pub unsafe extern "C" fn transport_services_connection_receive(
         // Start receiving messages in a loop
         loop {
             match conn_clone.next_event().await {
-                Some(ConnectionEvent::Received { message_data, message_context: _ }) => {
+                Some(ConnectionEvent::Received {
+                    message_data,
+                    message_context: _,
+                }) => {
                     // Convert message to FFI format
                     let ffi_message = types::TransportServicesMessage {
                         data: message_data.as_ptr(),
                         length: message_data.len(),
-                        lifetime_ms: 0, // Not available in received message context
-                        priority: 0, // Not available in received message context
+                        lifetime_ms: 0,    // Not available in received message context
+                        priority: 0,       // Not available in received message context
                         idempotent: false, // Not available in received message context
                         final_message: true, // Not available in received message context
                     };
@@ -156,7 +159,11 @@ pub unsafe extern "C" fn transport_services_connection_receive(
                         callback_data.user_data as *mut c_void,
                     );
                 }
-                Some(ConnectionEvent::ReceivedPartial { message_data, end_of_message, .. }) => {
+                Some(ConnectionEvent::ReceivedPartial {
+                    message_data,
+                    end_of_message,
+                    ..
+                }) => {
                     // For partial messages, accumulate or handle differently
                     // For now, just treat as complete message
                     let ffi_message = types::TransportServicesMessage {

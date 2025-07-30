@@ -9,14 +9,13 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 
 use ::windows::Win32::Foundation::{
-    ERROR_ADDRESS_NOT_ASSOCIATED, ERROR_BUFFER_OVERFLOW,
-    ERROR_INVALID_PARAMETER, ERROR_NOT_ENOUGH_MEMORY, ERROR_NO_DATA, ERROR_SUCCESS,
-    NO_ERROR, WIN32_ERROR, BOOLEAN, HANDLE,
+    BOOLEAN, ERROR_ADDRESS_NOT_ASSOCIATED, ERROR_BUFFER_OVERFLOW, ERROR_INVALID_PARAMETER,
+    ERROR_NOT_ENOUGH_MEMORY, ERROR_NO_DATA, ERROR_SUCCESS, HANDLE, NO_ERROR, WIN32_ERROR,
 };
 use ::windows::Win32::NetworkManagement::IpHelper::{
     CancelMibChangeNotify2, GetAdaptersAddresses, NotifyUnicastIpAddressChange,
-    MIB_NOTIFICATION_TYPE, MIB_UNICASTIPADDRESS_ROW, GAA_FLAG_SKIP_ANYCAST,
-    GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH,
+    GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH, MIB_NOTIFICATION_TYPE,
+    MIB_UNICASTIPADDRESS_ROW,
 };
 use ::windows::Win32::NetworkManagement::Ndis::IfOperStatusDown;
 use ::windows::Win32::Networking::WinSock::{
@@ -51,7 +50,7 @@ impl WindowsMonitor {
     /// List all network interfaces using GetAdaptersAddresses
     fn list_interfaces_internal() -> Result<Vec<Interface>, Error> {
         let mut interfaces = Vec::new();
-        
+
         // Microsoft recommends a 15 KB initial buffer
         let start_size = 15 * 1024;
         let mut buf: Vec<u8> = vec![0; start_size];
@@ -67,7 +66,7 @@ impl WindowsMonitor {
                     Some(bufptr),
                     &mut size_pointer,
                 );
-                
+
                 match WIN32_ERROR(res) {
                     ERROR_SUCCESS => break,
                     ERROR_ADDRESS_NOT_ASSOCIATED => {
@@ -97,7 +96,7 @@ impl WindowsMonitor {
             let mut adapter_ptr = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
             while !adapter_ptr.is_null() {
                 let adapter = &*adapter_ptr;
-                
+
                 // Skip interfaces that are down
                 if adapter.OperStatus == IfOperStatusDown {
                     adapter_ptr = adapter.Next;
@@ -116,14 +115,15 @@ impl WindowsMonitor {
                 while !unicast_ptr.is_null() {
                     let unicast = &*unicast_ptr;
                     let sockaddr = &*unicast.Address.lpSockaddr;
-                    
+
                     let ip = match sockaddr.sa_family {
                         AF_INET => {
                             let sockaddr_in = &*(unicast.Address.lpSockaddr as *const SOCKADDR_IN);
                             IpAddr::V4(sockaddr_in.sin_addr.into())
                         }
                         AF_INET6 => {
-                            let sockaddr_in6 = &*(unicast.Address.lpSockaddr as *const SOCKADDR_IN6);
+                            let sockaddr_in6 =
+                                &*(unicast.Address.lpSockaddr as *const SOCKADDR_IN6);
                             IpAddr::V6(sockaddr_in6.sin6_addr.into())
                         }
                         _ => {
@@ -131,7 +131,7 @@ impl WindowsMonitor {
                             continue;
                         }
                     };
-                    
+
                     ips.push(ip);
                     unicast_ptr = unicast.Next;
                 }
@@ -169,21 +169,21 @@ impl PlatformMonitor for WindowsMonitor {
     ) -> PlatformHandle {
         // Get initial interface list
         let prev_interfaces = Self::list_interfaces_internal().unwrap_or_default();
-        
+
         // Create the watch state
         let state = Arc::new(Mutex::new(WatchState {
             prev_interfaces,
             cb: callback,
         }));
-        
+
         // Get a raw pointer to pass to the Windows API
         let state_ptr = Arc::as_ptr(&state) as *const c_void;
-        
+
         // Store the state in self to keep it alive
         self.state = Some(state.clone());
-        
+
         let mut handle = HANDLE::default();
-        
+
         unsafe {
             let res = NotifyUnicastIpAddressChange(
                 AF_UNSPEC,
@@ -192,14 +192,14 @@ impl PlatformMonitor for WindowsMonitor {
                 BOOLEAN(0), // Not initial notification
                 &mut handle,
             );
-            
+
             match res {
                 NO_ERROR => {
                     // Trigger an initial update to establish baseline
                     if let Ok(new_list) = Self::list_interfaces_internal() {
                         handle_notif(&mut state.lock().unwrap(), new_list);
                     }
-                    
+
                     Box::new(WindowsWatchHandle {
                         handle,
                         _state: state,
@@ -244,10 +244,10 @@ unsafe extern "system" fn notif_callback(
     if ctx.is_null() {
         return;
     }
-    
+
     let state_ptr = ctx as *const Mutex<WatchState>;
     let state_mutex = &*state_ptr;
-    
+
     if let Ok(mut state_guard) = state_mutex.lock() {
         if let Ok(new_list) = WindowsMonitor::list_interfaces_internal() {
             handle_notif(&mut state_guard, new_list);
@@ -258,30 +258,31 @@ unsafe extern "system" fn notif_callback(
 /// Handle a notification by comparing old and new interface lists
 fn handle_notif(state: &mut WatchState, new_interfaces: Vec<Interface>) {
     // Create maps for efficient comparison
-    let old_map: HashMap<u32, &Interface> = state.prev_interfaces
+    let old_map: HashMap<u32, &Interface> = state
+        .prev_interfaces
         .iter()
         .map(|iface| (iface.index, iface))
         .collect();
-    
+
     let new_map: HashMap<u32, &Interface> = new_interfaces
         .iter()
         .map(|iface| (iface.index, iface))
         .collect();
-    
+
     // Find additions
     for (index, new_iface) in &new_map {
         if !old_map.contains_key(index) {
             (state.cb)(ChangeEvent::Added((*new_iface).clone()));
         }
     }
-    
+
     // Find removals
     for (index, old_iface) in &old_map {
         if !new_map.contains_key(index) {
             (state.cb)(ChangeEvent::Removed((*old_iface).clone()));
         }
     }
-    
+
     // Find modifications
     for (index, new_iface) in &new_map {
         if let Some(old_iface) = old_map.get(index) {
@@ -293,7 +294,7 @@ fn handle_notif(state: &mut WatchState, new_interfaces: Vec<Interface>) {
             }
         }
     }
-    
+
     // Update the stored state
     state.prev_interfaces = new_interfaces;
 }
@@ -313,12 +314,12 @@ fn ips_equal(a: &[IpAddr], b: &[IpAddr]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    
+
     let mut a_sorted = a.to_vec();
     let mut b_sorted = b.to_vec();
     a_sorted.sort();
     b_sorted.sort();
-    
+
     a_sorted == b_sorted
 }
 
@@ -335,7 +336,5 @@ fn detect_interface_type(if_type: u32) -> String {
 
 /// Create the platform implementation
 pub fn create_platform_impl() -> Result<Box<dyn PlatformMonitor + Send + Sync>, Error> {
-    Ok(Box::new(WindowsMonitor {
-        state: None,
-    }))
+    Ok(Box::new(WindowsMonitor { state: None }))
 }
