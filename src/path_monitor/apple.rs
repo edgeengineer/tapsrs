@@ -14,10 +14,12 @@ use std::sync::Arc;
 mod network_sys;
 use network_sys::*;
 
+type PathChangeCallback = Box<dyn Fn(ChangeEvent) + Send + 'static>;
+
 pub struct AppleDirectMonitor {
     monitor: Option<nw_path_monitor_t>,
     queue: Option<dispatch_queue_t>,
-    callback_holder: Option<Arc<Mutex<Box<dyn Fn(ChangeEvent) + Send + 'static>>>>,
+    callback_holder: Option<Arc<Mutex<PathChangeCallback>>>,
     update_block: Option<Box<PathUpdateBlock>>,
 }
 
@@ -147,8 +149,7 @@ impl PlatformMonitor for AppleDirectMonitor {
                 let uses_wired = nw_path_uses_interface_type(path, NW_INTERFACE_TYPE_WIRED);
 
                 // Log the change
-                log::info!("Path changed: status={}, expensive={}, constrained={}, wifi={}, cellular={}, wired={}", 
-                    status, is_expensive, is_constrained, uses_wifi, uses_cellular, uses_wired);
+                log::info!("Path changed: status={status}, expensive={is_expensive}, constrained={is_constrained}, wifi={uses_wifi}, cellular={uses_cellular}, wired={uses_wired}");
 
                 // Notify via callback
                 let callback = callback_holder.lock().unwrap();

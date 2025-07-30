@@ -50,7 +50,7 @@ impl PathAwareConnectionManager {
                 if let Some(_conn) = conn_weak.upgrade() {
                     match &event {
                         ChangeEvent::PathChanged { description } => {
-                            log::info!("Path changed for connection: {}", description);
+                            log::info!("Path changed for connection: {description}");
                             // TODO: Trigger connection migration if supported
                         }
                         ChangeEvent::Removed(interface) => {

@@ -117,12 +117,12 @@ where
             size: mem::size_of::<Block<F>>() as c_ulong,
             copy_helper: Some(copy_helper::<F>),
             dispose_helper: Some(dispose_helper::<F>),
-            signature: b"v@?@\0".as_ptr() as *const c_char, // void (^)(nw_path_t)
+            signature: c"v@?@".as_ptr() as *const c_char, // void (^)(nw_path_t)
             _phantom: PhantomData,
         });
 
         let mut block = Box::new(Block {
-            isa: unsafe { &_NSConcreteStackBlock as *const _ as *const c_void },
+            isa: unsafe { &_NSConcreteStackBlock as *const _ },
             flags: (1 << 25) | (1 << 24), // BLOCK_HAS_COPY_DISPOSE | BLOCK_HAS_SIGNATURE
             reserved: 0,
             invoke: invoke::<F>,

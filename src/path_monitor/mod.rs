@@ -97,7 +97,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::PlatformError(msg) => write!(f, "Platform error: {}", msg),
+            Error::PlatformError(msg) => write!(f, "Platform error: {msg}"),
             Error::PermissionDenied => write!(f, "Permission denied"),
             Error::NotSupported => write!(f, "Operation not supported on this platform"),
         }
