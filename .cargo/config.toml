@@ -1,0 +1,12 @@
+[target.aarch64-linux-android]
+linker = "/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang"
+ar = "/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+
+[env]
+# Set Android SDK/NDK paths
+ANDROID_NDK_HOME = "/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358"
+ANDROID_NDK_ROOT = "/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358"

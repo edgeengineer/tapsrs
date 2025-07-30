@@ -360,7 +360,7 @@ async fn test_listener_accept_connection() {
         SecurityParameters::new_disabled(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let listen_addr = listener.local_addr().await.unwrap();
 
     // Connect from client with short timeout
@@ -397,7 +397,7 @@ async fn test_client_server_data_exchange() {
         SecurityParameters::new_disabled(),
     );
 
-    let mut listener = server_preconn.listen().await.unwrap();
+    let listener = server_preconn.listen().await.unwrap();
     let listen_addr = listener.local_addr().await.unwrap();
 
     // Server accept loop
@@ -462,7 +462,7 @@ async fn test_listener_multiple_clients() {
         SecurityParameters::new_disabled(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let listen_addr = listener.local_addr().await.unwrap();
 
     // Spawn multiple clients
@@ -520,7 +520,7 @@ async fn test_listener_connection_limit_integration() {
         SecurityParameters::new_disabled(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let listen_addr = listener.local_addr().await.unwrap();
 
     // Set connection limit to 2
@@ -579,7 +579,7 @@ async fn test_rendezvous_peer_to_peer() {
     );
 
     // Start peer A rendezvous
-    let (conn_a, mut listener_a) = preconn_a.rendezvous().await.unwrap();
+    let (conn_a, listener_a) = preconn_a.rendezvous().await.unwrap();
     let addr_a = listener_a.local_addr().await.unwrap();
 
     // Peer B

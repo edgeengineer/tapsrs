@@ -91,7 +91,7 @@ async fn test_listener_accept_with_connection() {
         SecurityParameters::default(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let bound_addr = listener.local_addr().await.unwrap();
 
     // Spawn a client connection with short timeout
@@ -164,7 +164,7 @@ async fn test_listener_connection_limit() {
         SecurityParameters::default(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let bound_addr = listener.local_addr().await.unwrap();
 
     // Set connection limit to 1
@@ -211,7 +211,7 @@ async fn test_listener_event_stream() {
         SecurityParameters::default(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let bound_addr = listener.local_addr().await.unwrap();
 
     // Connect and check event
@@ -257,7 +257,7 @@ async fn test_listener_multiple_connections() {
         SecurityParameters::default(),
     );
 
-    let mut listener = preconn.listen().await.unwrap();
+    let listener = preconn.listen().await.unwrap();
     let bound_addr = listener.local_addr().await.unwrap();
 
     // Spawn multiple clients

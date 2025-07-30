@@ -5,6 +5,7 @@ pub mod connection;
 pub mod error;
 pub mod listener;
 pub mod message;
+pub mod path_monitor;
 pub mod preconnection;
 pub mod runtime;
 pub mod security_parameters;
@@ -91,3 +92,6 @@ pub unsafe fn handle_ref<'a, T>(handle: *const TransportServicesHandle) -> &'a T
 pub unsafe fn handle_mut<'a, T>(handle: *mut TransportServicesHandle) -> &'a mut T {
     &mut *(handle as *mut T)
 }
+
+// Android-specific FFI functions are defined in path_monitor/android.rs
+// and exported with #[no_mangle] so they don't need to be re-exported here

@@ -32,18 +32,12 @@ RUN mkdir -p /opt && \
     mv android-ndk-${ANDROID_NDK_VERSION} ${ANDROID_NDK_HOME} && \
     rm android-ndk.zip
 
-# Install Rust targets
+# Install Rust targets (only those available in stable Rust)
 RUN rustup target add \
-    aarch64-apple-ios \
-    aarch64-apple-tvos \
-    aarch64-apple-darwin \
-    x86_64-apple-darwin \
-    aarch64-apple-watchos \
     aarch64-linux-android \
     x86_64-unknown-linux-gnu \
     aarch64-unknown-linux-gnu \
-    x86_64-pc-windows-gnu \
-    aarch64-pc-windows-gnullvm
+    x86_64-pc-windows-gnu
 
 # Install cbindgen
 RUN cargo install cbindgen

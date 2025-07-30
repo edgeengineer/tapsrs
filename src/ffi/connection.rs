@@ -138,15 +138,15 @@ pub unsafe extern "C" fn transport_services_connection_receive(
         // Start receiving messages in a loop
         loop {
             match conn_clone.next_event().await {
-                Some(ConnectionEvent::Received { message, context }) => {
+                Some(ConnectionEvent::Received { message_data, message_context: _ }) => {
                     // Convert message to FFI format
                     let ffi_message = types::TransportServicesMessage {
-                        data: message.data().as_ptr(),
-                        length: message.data().len(),
-                        lifetime_ms: message.lifetime().as_millis() as u64,
-                        priority: message.priority(),
-                        idempotent: message.is_safely_replayable(),
-                        final_message: message.is_final(),
+                        data: message_data.as_ptr(),
+                        length: message_data.len(),
+                        lifetime_ms: 0, // Not available in received message context
+                        priority: 0, // Not available in received message context
+                        idempotent: false, // Not available in received message context
+                        final_message: true, // Not available in received message context
                     };
 
                     // Call the message callback
@@ -156,16 +156,16 @@ pub unsafe extern "C" fn transport_services_connection_receive(
                         callback_data.user_data as *mut c_void,
                     );
                 }
-                Some(ConnectionEvent::ReceivedPartial { data, is_end, .. }) => {
+                Some(ConnectionEvent::ReceivedPartial { message_data, end_of_message, .. }) => {
                     // For partial messages, accumulate or handle differently
                     // For now, just treat as complete message
                     let ffi_message = types::TransportServicesMessage {
-                        data: data.as_ptr(),
-                        length: data.len(),
+                        data: message_data.as_ptr(),
+                        length: message_data.len(),
                         lifetime_ms: 0,
                         priority: 0,
                         idempotent: false,
-                        final_message: is_end,
+                        final_message: end_of_message,
                     };
 
                     (callback_data.message_callback)(
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn transport_services_connection_receive(
                     );
                 }
                 Some(ConnectionEvent::ReceiveError { error }) => {
-                    error::set_last_error(&error);
+                    error::set_last_error_string(&error);
                     (callback_data.error_callback)(
                         types::TransportServicesError::ReceiveFailed,
                         error::transport_services_get_last_error(),

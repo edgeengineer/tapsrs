@@ -10,6 +10,7 @@ pub mod error;
 pub mod framer;
 pub mod listener;
 pub mod message;
+pub mod path_monitor;
 pub mod preconnection;
 pub mod types;
 
@@ -24,8 +25,9 @@ pub use connection_properties::{
 };
 pub use error::{Result, TransportServicesError};
 pub use framer::{Framer, FramerStack, LengthPrefixFramer};
-pub use listener::Listener;
+pub use listener::{Listener, ListenerEvent};
 pub use message::{Message, MessageContext};
+pub use path_monitor::{ChangeEvent, Interface, MonitorHandle, NetworkMonitor, Status};
 pub use preconnection::Preconnection;
 pub use types::*;
 
