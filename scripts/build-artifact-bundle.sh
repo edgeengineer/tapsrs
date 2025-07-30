@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Build script for creating Transport Services artifact bundle
 # Supports all target platforms: iOS, tvOS, macOS, watchOS, visionOS (devices and simulators for Apple Silicon),
@@ -11,31 +11,65 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build"
 ARTIFACT_BUNDLE_DIR="$BUILD_DIR/transport_services.artifactbundle"
-ARTIFACT_NAME="transport_services"
+ARTIFACT_NAME="TransportServicesFFI"
 VERSION="0.1.0"
 
 # Target platforms and architectures
-declare -A TARGETS=(
+# Note: tvOS, watchOS, and visionOS targets are not available in stable Rust
+PLATFORMS=(
     # Apple device targets
-    ["ios-arm64"]="aarch64-apple-ios"
-    ["tvos-arm64"]="aarch64-apple-tvos"
-    ["macos-arm64"]="aarch64-apple-darwin"
-    ["watchos-arm64"]="aarch64-apple-watchos"
-    ["visionos-arm64"]="aarch64-apple-visionos"
+    "ios-arm64"              # iPhone/iPad
+    "macos-arm64"            # Apple Silicon Mac
+    # "tvos-arm64"           # Apple TV - NOT AVAILABLE IN RUST
+    # "watchos-arm64"        # Apple Watch - NOT AVAILABLE IN RUST
+    # "visionos-arm64"       # Vision Pro - NOT AVAILABLE IN RUST
     
-    # Apple simulator targets (Apple Silicon only)
-    ["ios-sim-arm64"]="aarch64-apple-ios-sim"
-    ["tvos-sim-arm64"]="aarch64-apple-tvos-sim"
-    ["watchos-sim-arm64"]="aarch64-apple-watchos-sim"
-    ["visionos-sim-arm64"]="aarch64-apple-visionos-sim"
+    # Apple simulator targets
+    "ios-sim-arm64"          # iOS Simulator on Apple Silicon
     
-    # Other platforms
-    ["android-arm64"]="aarch64-linux-android"
-    ["linux-x86_64"]="x86_64-unknown-linux-gnu"
-    ["linux-arm64"]="aarch64-unknown-linux-gnu"
-    ["windows-x86_64"]="x86_64-pc-windows-msvc"
-    ["windows-arm64"]="aarch64-pc-windows-msvc"
+    # Android targets
+    "android-arm64"          # Android ARM64
+    
+    # Linux targets
+    "linux-x86_64"           # Linux x86_64
+    "linux-arm64"            # Linux ARM64
+    
+    # Windows targets
+    "windows-x86_64"         # Windows 11 x86_64
+    # "windows-arm64"          # Windows 11 ARM64 - NOT SUPPORTED WITH MINGW
 )
+
+RUST_TARGETS=(
+    # Apple device targets
+    "aarch64-apple-ios"
+    "aarch64-apple-darwin"
+    
+    # Apple simulator targets
+    "aarch64-apple-ios-sim"
+    
+    # Android targets
+    "aarch64-linux-android"
+    
+    # Linux targets
+    "x86_64-unknown-linux-gnu"
+    "aarch64-unknown-linux-gnu"
+    
+    # Windows targets
+    "x86_64-pc-windows-gnu"
+    # "aarch64-pc-windows-gnu"  # NOT SUPPORTED
+)
+
+# Function to get rust target for a platform
+get_rust_target() {
+    local platform=$1
+    for i in "${!PLATFORMS[@]}"; do
+        if [[ "${PLATFORMS[$i]}" == "$platform" ]]; then
+            echo "${RUST_TARGETS[$i]}"
+            return
+        fi
+    done
+    echo ""
+}
 
 # Initialize build environment
 init_build() {
@@ -48,7 +82,7 @@ init_build() {
 # Install required Rust targets
 install_rust_targets() {
     echo "Installing Rust targets..."
-    for target in "${TARGETS[@]}"; do
+    for target in "${RUST_TARGETS[@]}"; do
         rustup target add "$target" || true
     done
 }
@@ -68,7 +102,7 @@ generate_headers() {
     
     # Generate module map
     cat > "$BUILD_DIR/module.modulemap" << EOF
-module TransportServices {
+module TransportServicesFFI {
     header "transport_services.h"
     export *
 }
@@ -79,6 +113,7 @@ EOF
 build_target() {
     local platform=$1
     local rust_target=$2
+    local original_rust_target=$rust_target
     local variant_dir="$ARTIFACT_BUNDLE_DIR/$ARTIFACT_NAME/$platform"
     
     echo "Building for $platform ($rust_target)..."
@@ -86,15 +121,31 @@ build_target() {
     mkdir -p "$variant_dir/lib"
     mkdir -p "$variant_dir/include"
     
+    # Clear potentially conflicting environment variables
+    unset CC
+    unset CXX
+    unset AR
+    unset ANDROID_NDK_ROOT
+    unset ANDROID_NDK
+    
     # Set up cross-compilation environment
     case "$platform" in
         ios-*|tvos-*|macos-*|watchos-*|visionos-*)
             # Apple platforms - use default toolchain
             ;;
         android-*)
-            # Android requires NDK
-            export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
-            export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+            # Android requires NDK - skip if not available
+            if [ -z "${ANDROID_NDK_HOME:-}" ]; then
+                echo "Skipping Android build - ANDROID_NDK_HOME not set"
+                rm -rf "$variant_dir"
+                return
+            fi
+            # Set NDK environment variables that aws-lc-sys expects
+            export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+            export ANDROID_NDK="$ANDROID_NDK_HOME"
+            export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang"
+            export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+            export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang++"
             ;;
         linux-*)
             # Linux cross-compilation
@@ -104,15 +155,44 @@ build_target() {
             fi
             ;;
         windows-*)
-            # Windows cross-compilation from Linux
-            export CC="x86_64-w64-mingw32-gcc"
-            export AR="x86_64-w64-mingw32-ar"
+            # Windows cross-compilation from macOS using MinGW
+            if command -v x86_64-w64-mingw32-gcc &> /dev/null; then
+                export CC="x86_64-w64-mingw32-gcc"
+                export AR="x86_64-w64-mingw32-ar"
+                export CXX="x86_64-w64-mingw32-g++"
+            else
+                echo "MinGW x86_64 compiler not found - skipping Windows build"
+                rm -rf "$variant_dir"
+                return
+            fi
             ;;
     esac
     
-    # Build the static library
+    # Build the static library in a subshell to isolate environment
     cd "$PROJECT_ROOT"
-    cargo build --release --target "$rust_target" --features ffi
+    if [[ "$platform" == android-* ]]; then
+        # Use cargo-ndk for Android builds
+        if ! command -v cargo-ndk &> /dev/null; then
+            echo "cargo-ndk not found - skipping Android build"
+            rm -rf "$variant_dir"
+            return
+        fi
+        if ! (
+            cargo ndk -t arm64-v8a build --release --features ffi
+        ); then
+            echo "Failed to build for $platform - skipping"
+            rm -rf "$variant_dir"
+            return
+        fi
+    else
+        if ! (
+            cargo build --release --target "$rust_target" --features ffi
+        ); then
+            echo "Failed to build for $platform - skipping"
+            rm -rf "$variant_dir"
+            return
+        fi
+    fi
     
     # Copy the built library
     local lib_name
@@ -139,8 +219,16 @@ create_manifest() {
     
     local variants_json=""
     
-    for platform in "${!TARGETS[@]}"; do
-        local rust_target="${TARGETS[$platform]}"
+    for i in "${!PLATFORMS[@]}"; do
+        local platform="${PLATFORMS[$i]}"
+        local rust_target="$(get_rust_target "$platform")"
+        local variant_dir="$ARTIFACT_BUNDLE_DIR/$ARTIFACT_NAME/$platform"
+        
+        # Skip if the variant wasn't built
+        if [ ! -d "$variant_dir" ]; then
+            continue
+        fi
+        
         local lib_path
         
         case "$platform" in
@@ -212,7 +300,7 @@ create_bundle_index() {
                 mkdir -p "$group_bundle_dir/$ARTIFACT_NAME"
                 cp -r "$ARTIFACT_BUNDLE_DIR/$ARTIFACT_NAME/$platform" "$group_bundle_dir/$ARTIFACT_NAME/"
                 
-                local rust_target="${TARGETS[$platform]}"
+                local rust_target="$(get_rust_target "$platform")"
                 local lib_path
                 
                 case "$platform" in
@@ -268,7 +356,7 @@ EOF
             if [ -n "$supported_triples" ]; then
                 supported_triples+=", "
             fi
-            supported_triples+="\"${TARGETS[$platform]}\""
+            supported_triples+="\"$(get_rust_target "$platform")\""
         done
         
         if [ -n "$bundles_json" ]; then
@@ -301,10 +389,26 @@ main() {
     install_rust_targets
     generate_headers
     
+    # Track successful builds
+    local successful_builds=0
+    
     # Build all targets
-    for platform in "${!TARGETS[@]}"; do
-        build_target "$platform" "${TARGETS[$platform]}"
+    for i in "${!PLATFORMS[@]}"; do
+        local platform="${PLATFORMS[$i]}"
+        local rust_target="$(get_rust_target "$platform")"
+        build_target "$platform" "$rust_target"
+        if [ -d "$ARTIFACT_BUNDLE_DIR/$ARTIFACT_NAME/$platform" ]; then
+            ((successful_builds++))
+        fi
     done
+    
+    if [ $successful_builds -eq 0 ]; then
+        echo "ERROR: No targets were successfully built!"
+        exit 1
+    fi
+    
+    echo ""
+    echo "Successfully built $successful_builds out of ${#PLATFORMS[@]} targets"
     
     create_manifest
     create_bundle_index

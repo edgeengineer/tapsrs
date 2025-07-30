@@ -24,7 +24,7 @@ let package = Package(
         .executableTarget(
             name: "PathMonitorExample",
             dependencies: [
-                .product(name: "TransportServices", package: "TransportServices")
+                "TransportServices"
             ],
             path: ".",
             sources: ["PathMonitorExample.swift"]

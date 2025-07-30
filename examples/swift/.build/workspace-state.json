@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "tapsrs",
+          "kind" : "fileSystem",
+          "location" : "/Users/maximilianalexander/edgeengineer/tapsrs",
+          "name" : "TransportServices"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/maximilianalexander/edgeengineer/tapsrs"
+        },
+        "subpath" : "tapsrs"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

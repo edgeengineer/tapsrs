@@ -251,8 +251,6 @@ public actor Connection {
     private func setupEventHandling() {
         // TODO: Set up FFI event callbacks
     }
-    
-    }
 }
 
 // MARK: - Callback Contexts
