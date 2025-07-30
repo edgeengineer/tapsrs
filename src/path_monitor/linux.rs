@@ -31,7 +31,7 @@ impl PlatformMonitor for LinuxMonitor {
             while let Some(msg) = links
                 .try_next()
                 .await
-                .map_err(|e| Error::PlatformError(format!("Failed to get links: {}", e)))?
+                .map_err(|e| Error::PlatformError(format!("Failed to get links: {e}")))?
             {
                 if let Some(interface) = parse_link_message(&msg).await {
                     interfaces.push(interface);
@@ -141,12 +141,9 @@ fn parse_address_message(msg: &AddressMessage, if_index: u32) -> Option<IpAddr> 
 
     for attr in &msg.attributes {
         use netlink_packet_route::address::AddressAttribute;
-        match attr {
-            AddressAttribute::Address(addr) => {
-                // addr is IpAddr, not bytes
-                return Some(addr.clone());
-            }
-            _ => {}
+        if let AddressAttribute::Address(addr) = attr {
+            // addr is IpAddr, not bytes
+            return Some(*addr);
         }
     }
 
@@ -170,12 +167,12 @@ fn detect_interface_type(name: &str) -> String {
 pub fn create_platform_impl() -> Result<Box<dyn PlatformMonitor + Send + Sync>, Error> {
     let runtime = Arc::new(
         Runtime::new()
-            .map_err(|e| Error::PlatformError(format!("Failed to create runtime: {}", e)))?,
+            .map_err(|e| Error::PlatformError(format!("Failed to create runtime: {e}")))?,
     );
 
     let (conn, handle, _) = runtime.block_on(async {
         new_connection().map_err(|e| {
-            Error::PlatformError(format!("Failed to create netlink connection: {}", e))
+            Error::PlatformError(format!("Failed to create netlink connection: {e}"))
         })
     })?;
 
