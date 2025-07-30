@@ -3,3 +3,6 @@
 /.build
 transport_services.h
 Cargo.lock
+
+# Swift version management
+.swift-version
